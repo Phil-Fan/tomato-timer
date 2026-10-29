@@ -117,10 +117,6 @@ private struct GeneralSettingsView: View {
                 }
             } header: {
                 Text("飞书")
-            } footer: {
-                Text("飞书群 → 设置 → 群机器人 → 添加自定义机器人，复制 Webhook 地址；如果机器人开启了签名校验，再填密钥。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
