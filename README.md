@@ -1,15 +1,20 @@
 # 番茄钟
 
-一个 macOS 菜单栏番茄钟，SwiftUI + EventKit，无第三方依赖。
+一个 macOS 菜单栏番茄钟，SwiftUI + EventKit + Swift Charts，无第三方依赖。
 
 ## 功能
 
-- 点开菜单栏图标就是「开始专注」卡片：选分类、选时长（15/25/45/60，可在设置里加自定义默认值），一步开始。
-- 菜单栏显示倒计时，专注 / 短休息 / 长休息自动轮转。
-- 完成的专注可以写入指定日历，标题包含**分类**和**时长**，备注里带第几个番茄和完成时间。
-- 今日番茄数与专注分钟数统计，跨天自动归零。
-- 系统通知 + 提示音；支持自动开始下一段。
-- 分类可在「设置 → 分类」里增删改名，最多 8 个。
+- 固定 **45 分钟** 专注：点开菜单栏图标就是开始卡片，选分类后一步开始。
+- 没有休息阶段：完成一个番茄后回到开始卡片，直接开始下一个。
+- 菜单栏显示倒计时，桌面悬浮球同步显示进度。
+- 完成的专注写入指定日历，标题固定为 `专注 · 分类 · 45 分钟`，备注带第几个专注和完成时间。
+- 设置 → 分类：每个分类设置每日目标分钟数，顶部显示每日目标合计。
+- 统计页：
+  - 今日活动环：完成度、已专注分钟、目标分钟
+  - 最近 7 天趋势柱
+  - 今天的分类实际占比 vs 目标占比（进度条 + 目标刻度）
+- 分类可增删改名、换 SF Symbol 图标，最多 8 个。
+- 提醒默认开启，结束发系统通知并播放提示音。
 
 ## 运行
 
@@ -29,38 +34,72 @@ xcodebuild -project TomatoTimer.xcodeproj -scheme TomatoTimer \
 open .build/Build/Products/Debug/TomatoTimer.app
 ```
 
-用 Xcode 打开 `TomatoTimer.xcodeproj` 也可以直接 Run（签名用 “Sign to Run Locally” 即可，不需要开发者账号）。
+用 Xcode 打开 `TomatoTimer.xcodeproj` 也可以直接 Run（“Sign to Run Locally” 即可，不需要开发者账号）。
 
-首次开启日历写入时系统会弹权限请求。如果之前拒绝过，可以重置后再试：
+首次开启日历写入时系统会弹权限请求。如果之前拒绝过：
 
 ```bash
 tccutil reset Calendar com.philfan.tomato
 ```
 
+## 打包成 App
+
+```bash
+./scripts/package.sh
+```
+
+输出到 `dist/`：
+
+- `番茄钟.dmg`：打开后把 App 拖进 Applications。
+- `番茄钟.zip`：直接解压使用。
+
+脚本会构建 Release、校验签名、生成 DMG（带 Applications 快捷方式）和 ZIP。App 图标由 `scripts/make-icon.swift` 生成。
+
+### 自己用或给朋友
+
+当前是 ad-hoc 签名（Sign to Run Locally），在本机可以直接打开。复制到别的 Mac 时 Gatekeeper 可能拦截，可以：
+
+- 右键 App → 打开，或
+- 系统设置 → 隐私与安全性 → 仍要打开，或
+- `xattr -dr com.apple.quarantine /Applications/番茄钟.app`
+
+### 正式分发
+
+需要 Apple Developer Program（Developer ID 证书）。在 `project.yml` 里设置：
+
+```yaml
+DEVELOPMENT_TEAM: YOUR_TEAM_ID
+CODE_SIGN_STYLE: Manual
+CODE_SIGN_IDENTITY: "Developer ID Application"
+ENABLE_HARDENED_RUNTIME: YES
+```
+
+然后用 `xcodebuild archive` 导出 developer-id 版本，并对 DMG 公证：
+
+```bash
+xcrun notarytool submit dist/番茄钟.dmg --keychain-profile "notary" --wait
+xcrun stapler staple dist/番茄钟.dmg
+spctl -a -vvv -t install dist/番茄钟.dmg
+```
+
+没有开发者账号时，ad-hoc 版本只适合自己使用，或让对方手动放行。
+
 ## 日历怎么配
 
-**Google 日历**
-
 1. 系统设置 → 互联网账户 → 添加 Google 账户，勾选「日历」。
-2. 打开番茄钟 → 设置 → 日历 → 选择该账户下的日历。
-3. 想让别人只看到专注记录：在 Google 日历里单独建一个「🍅 专注」日历，只共享这个日历，不要共享主日历。
+2. 番茄钟 → 设置 → 日历 → 打开写入并选择该账户下的日历。
+3. 想让别人只看到专注记录：在 Google 日历里单独建一个「专注」日历，只共享这个日历。
+4. 飞书：日历 → 添加日历 → 添加第三方日历 → 谷歌日历，登录同一个 Google 账号即可看到这些记录。
 
-**飞书**
-
-- 飞书 → 日历 → 添加日历 → 添加第三方日历 → 谷歌日历，登录同一个 Google 账号，专注记录就会出现在飞书里。
-- 飞书自己的 CalDAV 是只读的，番茄钟不会往飞书写日程；要写飞书需要另外接飞书开放平台 API。
-
-**共享给别人（Google 侧）**
-
-Google 日历 → 目标日历 → 设置和共享 → 与特定人员共享，对方需要有 Google 账号；没有账号只能通过公开链接只读查看。不要把「iCal 格式的秘密地址」发给别人，它等于整个日历的读取权限。
+飞书自己的 CalDAV 是只读的，所以 App 不直接往飞书写。
 
 ## 数据
 
-设置、分类和今日统计保存在 `UserDefaults`（bundle id `com.philfan.tomato`），没有自建数据库。
+设置、分类、完成记录保存在 `UserDefaults`（bundle id `com.philfan.tomato`）。完成记录保留 400 天，可在「设置 → 通用 → 数据」里重置今日或清空全部。
 
 ## 开发提示
 
-Debug 构建支持一个冒烟测试入口，直接启动一个短番茄：
+Debug 构建支持一个冒烟测试入口，直接启动一个短番茄（正式界面固定 45 分钟，这个只用于测试）：
 
 ```bash
 TOMATO_AUTOSTART=1 TOMATO_AUTOSTART_MINUTES=1 \
@@ -71,16 +110,18 @@ TOMATO_AUTOSTART=1 TOMATO_AUTOSTART_MINUTES=1 \
 
 ```
 Sources/
-  TomatoTimerApp.swift     菜单栏入口
+  TomatoTimerApp.swift     菜单栏入口 + 悬浮球装配
   AppModel.swift           依赖装配
-  TimerEngine.swift        计时状态机
+  TimerEngine.swift        45 分钟计时状态机
   AppSettings.swift        偏好设置（UserDefaults）
-  CategoryStore.swift      分类持久化
+  CategoryStore.swift      分类与每日目标
+  SessionHistory.swift     完成记录 + 今日统计
   CalendarService.swift    EventKit 读写
-  StatsStore.swift         今日统计
   NotificationScheduler.swift
+  FloatingBall.swift       桌面悬浮球
   Views/
     PopoverView.swift      开始卡片 + 计时界面
+    StatsView.swift        统计与图表
     SettingsView.swift     设置
     Theme.swift            分类配色
 Support/Info.plist         由 xcodegen 生成
