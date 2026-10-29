@@ -77,17 +77,6 @@ final class SessionHistory {
         return records.filter { interval.contains($0.completedAt) }
     }
 
-    func resetToday() {
-        let today = Set(records(on: Date()).map(\.id))
-        records.removeAll { today.contains($0.id) }
-        save()
-    }
-
-    func clearAll() {
-        records.removeAll()
-        save()
-    }
-
     private func prune() {
         guard let cutoff = calendar.date(byAdding: .day, value: -Key.keepDays, to: Date()) else { return }
         records.removeAll { $0.completedAt < cutoff }
