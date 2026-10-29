@@ -26,17 +26,12 @@ final class CategoryStore {
             items = FocusCategory.defaults
         }
 
-        // 旧版本没有目标比例，按分类名补默认值；再不行就平均分。
-        if items.reduce(0, { $0 + max(0, $1.ratio) }) <= 0 {
-            let equalShare = 1.0 / Double(max(1, items.count))
-            for index in items.indices {
-                items[index].ratio = FocusCategory.defaults
-                    .first { $0.name == items[index].name }?.ratio ?? equalShare
-            }
-        }
-
-        // 让分类从第一次启动起就有稳定的 UUID，方便记住上次选择。
+        normalizeRatios()
         save()
+    }
+
+    var totalPercent: Int {
+        Int((items.reduce(0) { $0 + max(0, $1.ratio) } * 100).rounded())
     }
 
     func category(id: UUID?) -> FocusCategory? {
@@ -65,17 +60,34 @@ final class CategoryStore {
         items.append(
             FocusCategory(
                 name: "新分类",
-                emoji: "✨",
+                symbol: "sparkles",
                 colorIndex: items.count % CategoryPalette.hexes.count,
                 ratio: share
             )
         )
+        normalizeRatios()
     }
 
     func remove(id: UUID) {
         guard items.count > 1 else { return }
         items.removeAll { $0.id == id }
         normalizeRatios()
+    }
+
+    // 修改都按 ID 查找，行视图被删除后不会越界访问数组。
+    func updateName(id: UUID, name: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].name = name
+    }
+
+    func updateSymbol(id: UUID, symbol: String) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].symbol = symbol
+    }
+
+    func updateRatio(id: UUID, percent: Int) {
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].ratio = Double(min(100, max(0, percent))) / 100
     }
 
     /// 按现有比例缩放到合计 100%。

@@ -6,7 +6,6 @@ import Observation
 final class AppSettings {
     private enum Key {
         static let notifications = "notificationsEnabled"
-        static let showTime = "showTimeInMenuBar"
         static let showFloatingBall = "showFloatingBall"
         static let writeCalendar = "writeToCalendar"
         static let calendarID = "calendarID"
@@ -18,7 +17,6 @@ final class AppSettings {
 
     /// 提醒默认开启。
     var notificationsEnabled: Bool { didSet { defaults.set(notificationsEnabled, forKey: Key.notifications) } }
-    var showTimeInMenuBar: Bool { didSet { defaults.set(showTimeInMenuBar, forKey: Key.showTime) } }
     var showFloatingBall: Bool { didSet { defaults.set(showFloatingBall, forKey: Key.showFloatingBall) } }
 
     var writeToCalendar: Bool { didSet { defaults.set(writeToCalendar, forKey: Key.writeCalendar) } }
@@ -32,6 +30,9 @@ final class AppSettings {
         }
     }
 
+    /// 每天的目标专注总时长（分钟），在分类页里设置。
+    var dailyTargetMinutes: Int { didSet { defaults.set(dailyTargetMinutes, forKey: Key.dailyTarget) } }
+
     /// 开始卡片上一次选择的分类。
     var lastCategoryID: String? {
         didSet {
@@ -43,14 +44,10 @@ final class AppSettings {
         }
     }
 
-    /// 每天固定的预计专注时长（分钟）。
-    var dailyTargetMinutes: Int { didSet { defaults.set(dailyTargetMinutes, forKey: Key.dailyTarget) } }
-
     init(defaults: UserDefaults = .standard) {
         self.defaults = defaults
 
         notificationsEnabled = defaults.object(forKey: Key.notifications) as? Bool ?? true
-        showTimeInMenuBar = defaults.object(forKey: Key.showTime) as? Bool ?? true
         showFloatingBall = defaults.object(forKey: Key.showFloatingBall) as? Bool ?? true
 
         writeToCalendar = defaults.object(forKey: Key.writeCalendar) as? Bool ?? false

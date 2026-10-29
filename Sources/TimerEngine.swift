@@ -32,14 +32,16 @@ final class TimerEngine {
     // MARK: - 派生状态
 
     var sessionTitle: String {
-        if let activeCategory {
-            return "\(activeCategory.emoji) \(activeCategory.name)"
-        }
-        return "专注"
+        activeCategory?.displayName ?? "专注"
     }
 
-    var sessionEmoji: String {
-        activeCategory?.emoji ?? "🍅"
+    var menuBarSymbol: String {
+        activeCategory?.symbol ?? "timer"
+    }
+
+    var menuBarText: String {
+        guard isRunning || hasStarted else { return "" }
+        return timeString
     }
 
     var sessionTotalSeconds: TimeInterval {
@@ -68,13 +70,6 @@ final class TimerEngine {
     var timeString: String {
         let total = Int(remainingSeconds.rounded(.up))
         return String(format: "%02d:%02d", total / 60, total % 60)
-    }
-
-    var menuBarLabel: String {
-        guard settings.showTimeInMenuBar, isRunning || hasStarted else {
-            return "🍅"
-        }
-        return "\(sessionEmoji) \(timeString)"
     }
 
     // MARK: - 操作
@@ -181,12 +176,12 @@ final class TimerEngine {
         history.record(category: category, minutes: minutes, at: completedAt)
 
         if settings.writeToCalendar {
-            let categoryName = category?.name ?? "专注"
-            let title = "🍅 \(categoryName) · \(minutes) 分钟"
+            let categoryName = category?.displayName ?? "专注"
+            let title = "专注 · \(categoryName) · \(minutes) 分钟"
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "zh_CN")
             formatter.dateFormat = "HH:mm"
-            let notes = "分类：\(categoryName) · 第 \(history.todayCount) 个番茄 · 完成于 \(formatter.string(from: completedAt))"
+            let notes = "分类：\(categoryName) · 第 \(history.todayCount) 个专注 · 完成于 \(formatter.string(from: completedAt))"
             calendar.writeFocus(
                 start: completedAt.addingTimeInterval(-duration),
                 end: completedAt,
@@ -212,7 +207,7 @@ final class TimerEngine {
         let minutes = max(1, Int((plannedDuration / 60).rounded()))
         NotificationScheduler.schedule(
             in: seconds,
-            title: "专注完成 🍅",
+            title: "专注完成",
             body: "\(sessionTitle) \(minutes) 分钟已完成，已记入统计。",
             id: notificationID
         )

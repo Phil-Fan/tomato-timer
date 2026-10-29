@@ -7,22 +7,19 @@ struct SessionRecord: Identifiable, Codable, Hashable {
     var minutes: Int
     var categoryID: UUID?
     var categoryName: String
-    var emoji: String
 
     init(
         id: UUID = UUID(),
         completedAt: Date = Date(),
         minutes: Int,
         categoryID: UUID?,
-        categoryName: String,
-        emoji: String
+        categoryName: String
     ) {
         self.id = id
         self.completedAt = completedAt
         self.minutes = minutes
         self.categoryID = categoryID
         self.categoryName = categoryName
-        self.emoji = emoji
     }
 }
 
@@ -56,8 +53,7 @@ final class SessionHistory {
                 completedAt: date,
                 minutes: max(1, minutes),
                 categoryID: category?.id,
-                categoryName: category?.name ?? "专注",
-                emoji: category?.emoji ?? "🍅"
+                categoryName: category?.displayName ?? "专注"
             )
         )
         prune()

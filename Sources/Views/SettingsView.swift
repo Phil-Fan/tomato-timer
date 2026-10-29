@@ -1,5 +1,7 @@
 import AppKit
+import Combine
 import SwiftUI
+import UserNotifications
 
 struct SettingsView: View {
     let model: AppModel
@@ -13,46 +15,64 @@ struct SettingsView: View {
             )
             .tabItem { Label("统计", systemImage: "chart.pie") }
 
-            CategorySettingsView(categories: model.categories)
-                .tabItem { Label("分类", systemImage: "square.grid.2x2") }
+            CategorySettingsView(
+                settings: model.settings,
+                categories: model.categories
+            )
+            .tabItem { Label("分类", systemImage: "square.grid.2x2") }
 
             CalendarSettingsView(settings: model.settings, calendar: model.calendar)
                 .tabItem { Label("日历", systemImage: "calendar") }
 
-            GeneralSettingsView(settings: model.settings, history: model.history)
-                .tabItem { Label("通用", systemImage: "gearshape") }
+            GeneralSettingsView(
+                settings: model.settings,
+                history: model.history
+            )
+            .tabItem { Label("通用", systemImage: "gearshape") }
         }
-        .frame(width: 660, height: 620)
+        .frame(width: 640, height: 560)
     }
 }
 
-// MARK: - 通用（计时 + 提醒 + 显示 + 数据）
+// MARK: - 通用
 
 private struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     var history: SessionHistory
 
     @State private var showClearHistory = false
+    @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
 
     var body: some View {
         Form {
-            Section {
+            Section("提醒") {
                 Toggle("结束时发送通知并播放提示音", isOn: $settings.notificationsEnabled)
                     .onChange(of: settings.notificationsEnabled) { _, enabled in
                         if enabled {
-                            Task { _ = await NotificationScheduler.requestAuthorization() }
+                            Task {
+                                _ = await NotificationScheduler.requestAuthorization()
+                                await refreshNotificationStatus()
+                            }
                         }
                     }
-            } header: {
-                Text("提醒")
-            } footer: {
-                Text("关闭后不再发送系统通知，也不会播放提示音。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+
+                if settings.notificationsEnabled, notificationStatus != .authorized {
+                    HStack {
+                        Text(notificationStatus == .denied ? "通知权限已关闭" : "尚未获取通知权限")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Button("获取权限") {
+                            handleNotificationPermission()
+                        }
+                        .accessibilityLabel("获取通知权限")
+                    }
+                }
             }
 
             Section("显示") {
-                Toggle("在菜单栏显示剩余时间", isOn: $settings.showTimeInMenuBar)
                 Toggle("显示桌面悬浮球", isOn: $settings.showFloatingBall)
             }
 
@@ -67,6 +87,12 @@ private struct GeneralSettingsView: View {
             }
         }
         .formStyle(.grouped)
+        .task {
+            await refreshNotificationStatus()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            Task { await refreshNotificationStatus() }
+        }
         .confirmationDialog(
             "清空全部历史？",
             isPresented: $showClearHistory
@@ -79,52 +105,91 @@ private struct GeneralSettingsView: View {
             Text("所有完成记录都会被删除，无法恢复。")
         }
     }
+
+    private func refreshNotificationStatus() async {
+        let settings = await UNUserNotificationCenter.current().notificationSettings()
+        notificationStatus = settings.authorizationStatus
+    }
+
+    private func handleNotificationPermission() {
+        if notificationStatus == .notDetermined {
+            Task {
+                _ = await NotificationScheduler.requestAuthorization()
+                await refreshNotificationStatus()
+            }
+        } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
+            NSWorkspace.shared.open(url)
+        }
+    }
 }
 
 // MARK: - 分类
 
 private struct CategorySettingsView: View {
+    @Bindable var settings: AppSettings
     @Bindable var categories: CategoryStore
-
-    private var totalPercent: Int {
-        categories.items.reduce(0) { $0 + Int(($1.ratio * 100).rounded()) }
-    }
 
     var body: some View {
         Form {
             Section {
-                ForEach($categories.items) { $category in
+                HStack(spacing: 8) {
+                    Text("每天目标")
+                    Spacer()
+                    TextField("", value: $settings.dailyTargetMinutes, format: .number)
+                        .labelsHidden()
+                        .textFieldStyle(.roundedBorder)
+                        .monospacedDigit()
+                        .multilineTextAlignment(.trailing)
+                        .frame(width: 64)
+                    Text("分钟")
+                    Stepper("", value: $settings.dailyTargetMinutes, in: 30...720, step: 30)
+                        .labelsHidden()
+                }
+                Text("按下面的百分比分配给各分类，分类右边的分钟数会自动算出来。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } header: {
+                Text("每日目标")
+            }
+
+            Section {
+                ForEach(categories.items) { category in
                     CategoryRow(
-                        category: $category,
-                        canDelete: categories.items.count > 1,
-                        onDelete: { categories.remove(id: category.id) }
+                        categoryID: category.id,
+                        store: categories,
+                        dailyTargetMinutes: settings.dailyTargetMinutes,
+                        canDelete: categories.items.count > 1
                     )
                 }
 
-                Button {
-                    categories.add()
-                } label: {
-                    Label("添加分类", systemImage: "plus")
-                }
-                .disabled(categories.items.count >= 8)
-
                 HStack {
-                    Text("目标合计")
-                    Spacer()
-                    Text("\(totalPercent)%")
-                        .monospacedDigit()
-                        .foregroundStyle(totalPercent == 100 ? Color.secondary : Color.orange)
-                    Button("平均分配") {
-                        categories.averageRatios()
+                    Button {
+                        categories.add()
+                    } label: {
+                        Label("添加分类", systemImage: "plus")
                     }
-                    .controlSize(.small)
+                    .disabled(categories.items.count >= 8)
+
+                    Spacer()
+
+                    if categories.totalPercent != 100 {
+                        Button("平均分配") {
+                            categories.averageRatios()
+                        }
+                    }
                 }
             } header: {
-                Text("专注分类")
+                Text("目标占比")
             } footer: {
-                Text("分类名称会写进日历标题；右边的百分比是每天的目标占比。合计不是 100% 时，图表会按相对比例换算。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                if categories.totalPercent == 100 {
+                    Text("占比合计 100%，每天 \(settings.dailyTargetMinutes) 分钟。")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("占比合计 \(categories.totalPercent)%，统计页会按相对比例换算。")
+                        .font(.caption)
+                        .foregroundStyle(.orange)
+                }
             }
         }
         .formStyle(.grouped)
@@ -132,47 +197,111 @@ private struct CategorySettingsView: View {
 }
 
 private struct CategoryRow: View {
-    @Binding var category: FocusCategory
+    let categoryID: UUID
+    var store: CategoryStore
+    let dailyTargetMinutes: Int
     let canDelete: Bool
-    let onDelete: () -> Void
+
+    /// 本地草稿：中文输入法拼写过程中不写回模型，避免候选词被重绘打断。
+    @State private var draftName = ""
+    @FocusState private var isNameFocused: Bool
+
+    private var category: FocusCategory? {
+        store.category(id: categoryID)
+    }
 
     private var percentBinding: Binding<Int> {
         Binding(
-            get: { Int((category.ratio * 100).rounded()) },
-            set: { category.ratio = Double($0) / 100 }
+            get: { Int(((store.category(id: categoryID)?.ratio ?? 0) * 100).rounded()) },
+            set: { store.updateRatio(id: categoryID, percent: $0) }
         )
+    }
+
+    private var targetMinutes: Int {
+        Int((Double(max(0, dailyTargetMinutes)) * max(0, category?.ratio ?? 0)).rounded())
     }
 
     var body: some View {
         HStack(spacing: 10) {
-            TextField("", text: $category.emoji)
-                .textFieldStyle(.plain)
-                .font(.system(size: 17))
-                .multilineTextAlignment(.center)
-                .frame(width: 30)
-
-            TextField("分类名称", text: $category.name)
-                .textFieldStyle(.plain)
-
-            Spacer(minLength: 8)
-
-            Stepper(value: percentBinding, in: 0...100, step: 5) {
-                Text("\(Int((category.ratio * 100).rounded()))%")
-                    .monospacedDigit()
-                    .frame(width: 38, alignment: .trailing)
+            Menu {
+                ForEach(IconChoice.all) { choice in
+                    Button {
+                        store.updateSymbol(id: categoryID, symbol: choice.symbol)
+                    } label: {
+                        Label(choice.name, systemImage: choice.symbol)
+                    }
+                }
+            } label: {
+                Image(systemName: category?.symbol ?? "circle.dashed")
+                    .font(.system(size: 15))
+                    .foregroundStyle(category?.tint ?? .gray)
+                    .frame(width: 24)
             }
-            .controlSize(.small)
+            .menuStyle(.borderlessButton)
+            .menuIndicator(.hidden)
             .fixedSize()
+            .help("选择图标")
 
-            Button(role: .destructive, action: onDelete) {
+            TextField("分类名称", text: $draftName)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .focused($isNameFocused)
+                .onSubmit(commitName)
+                .onChange(of: isNameFocused) { _, focused in
+                    if !focused { commitName() }
+                }
+                .onChange(of: category?.name) { _, newName in
+                    if !isNameFocused { draftName = newName ?? "" }
+                }
+                .onAppear { draftName = category?.name ?? "" }
+                .onDisappear(perform: commitName)
+
+            Spacer(minLength: 12)
+
+            TextField("", value: percentBinding, format: .number)
+                .labelsHidden()
+                .textFieldStyle(.roundedBorder)
+                .monospacedDigit()
+                .multilineTextAlignment(.trailing)
+                .frame(width: 52)
+
+            Text("%")
+                .foregroundStyle(.secondary)
+
+            Text("≈ \(targetMinutes) 分钟")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+                .monospacedDigit()
+                .frame(width: 58, alignment: .trailing)
+
+            Stepper("", value: percentBinding, in: 0...100, step: 5)
+                .labelsHidden()
+                .controlSize(.small)
+
+            Button(role: .destructive) {
+                store.remove(id: categoryID)
+            } label: {
                 Image(systemName: "trash")
                     .foregroundStyle(canDelete ? Color.secondary : Color.secondary.opacity(0.3))
             }
-            .buttonStyle(.plain)
+            .buttonStyle(.borderless)
             .disabled(!canDelete)
             .help(canDelete ? "删除这个分类" : "至少保留一个分类")
         }
-        .padding(.vertical, 2)
+        .frame(height: 32)
+    }
+
+    private func commitName() {
+        // 行可能已经被删除：按 ID 查找，找不到就安全返回。
+        guard let current = store.category(id: categoryID) else { return }
+        let trimmed = draftName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            draftName = current.name
+            return
+        }
+        if trimmed != current.name {
+            store.updateName(id: categoryID, name: trimmed)
+        }
     }
 }
 
@@ -198,7 +327,7 @@ private struct CalendarSettingsView: View {
             } header: {
                 Text("写入")
             } footer: {
-                Text("只记录完整结束的番茄，标题会自动带上分类和时长。")
+                Text("只记录完整结束的番茄。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -209,16 +338,17 @@ private struct CalendarSettingsView: View {
                         .foregroundStyle(calendar.isAuthorized ? Color.green : Color.orange)
                     Text(calendar.statusText)
                     Spacer()
-                    Button("刷新") { calendar.refresh() }
-                    if calendar.status == .notDetermined {
-                        Button("请求访问") {
-                            Task { await calendar.requestAccess() }
+
+                    if !calendar.isAuthorized {
+                        Button("获取权限") {
+                            handleCalendarPermission()
                         }
+                        .accessibilityLabel("获取日历权限")
                     }
                 }
 
                 if calendar.isAuthorized && calendar.calendars.isEmpty {
-                    Text("没有找到可写入的日历。请在系统「日历」App 中添加一个账户。")
+                    Text("没有找到可写入的日历，请先在系统「日历」里添加账户。")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
@@ -228,13 +358,6 @@ private struct CalendarSettingsView: View {
                         .font(.caption)
                         .foregroundStyle(.red)
                 }
-            }
-
-            Section("提示") {
-                Text("在系统设置 → 互联网账户中添加 Google 账号后，这里会出现该账户下的日历。飞书可以在「添加第三方日历 → 谷歌日历」中查看这些专注记录。")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
@@ -254,5 +377,22 @@ private struct CalendarSettingsView: View {
                 Task { await calendar.requestAccess() }
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            calendar.refresh()
+        }
+    }
+
+    private func handleCalendarPermission() {
+        switch calendar.status {
+        case .notDetermined:
+            Task { await calendar.requestAccess() }
+        default:
+            openSystemSettings("x-apple.systempreferences:com.apple.preference.security?Privacy_Calendars")
+        }
+    }
+
+    private func openSystemSettings(_ urlString: String) {
+        guard let url = URL(string: urlString) else { return }
+        NSWorkspace.shared.open(url)
     }
 }
