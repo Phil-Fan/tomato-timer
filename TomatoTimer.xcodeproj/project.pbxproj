@@ -17,6 +17,7 @@
 		851AB7743DE4432993CA37BD /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76AE39B5A74681E51C9104B0 /* CategoryStore.swift */; };
 		940992D3A3D0EAA019EBA970 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1541B2F220CADEA785EAB4E2 /* AppModel.swift */; };
 		A14DBA312D57BD221FA20365 /* FloatingBall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430A4FA2533E322DD6778AAC /* FloatingBall.swift */; };
+		AD444892382B252A75D641A7 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 75B26F0C7E00FFD429D87FB2 /* AppIcon.icns */; };
 		B931A4DE1786AC26D3ABE5C1 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49FBB1325AF9EEFF06E5BC87 /* PopoverView.swift */; };
 		CC6087F94DE4B4F8C2A8B4AE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5FE602FAC7E4344DF926A4 /* Models.swift */; };
 		DB15B43C276C1B68C8C94268 /* SessionHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9F507517E72961D2D151D2 /* SessionHistory.swift */; };
@@ -30,6 +31,7 @@
 		49FBB1325AF9EEFF06E5BC87 /* PopoverView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PopoverView.swift; sourceTree = "<group>"; };
 		5C9F507517E72961D2D151D2 /* SessionHistory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionHistory.swift; sourceTree = "<group>"; };
 		70D4E55D51BF794B27975098 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
+		75B26F0C7E00FFD429D87FB2 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		76AE39B5A74681E51C9104B0 /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
 		798F276B4374A9DCF0E3AEE4 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A5861DB3DD8724BCB85E1991 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
@@ -42,10 +44,19 @@
 /* End PBXFileReference section */
 
 /* Begin PBXGroup section */
+		212B648B50476A495451293A /* Support */ = {
+			isa = PBXGroup;
+			children = (
+				75B26F0C7E00FFD429D87FB2 /* AppIcon.icns */,
+			);
+			path = Support;
+			sourceTree = "<group>";
+		};
 		46E22A4DE0B3C4B522EE0E8B = {
 			isa = PBXGroup;
 			children = (
 				F5058718D530C4762065BB90 /* Sources */,
+				212B648B50476A495451293A /* Support */,
 				CFE34E28B20A34959919F2E9 /* Products */,
 			);
 			sourceTree = "<group>";
@@ -95,6 +106,7 @@
 			buildConfigurationList = 754BECF0392D3BB7AEEEC11C /* Build configuration list for PBXNativeTarget "TomatoTimer" */;
 			buildPhases = (
 				D1317CA3B78B882C1C28B68A /* Sources */,
+				CD2C619642212C1AF0050F9E /* Resources */,
 			);
 			buildRules = (
 			);
@@ -140,6 +152,17 @@
 			);
 		};
 /* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		CD2C619642212C1AF0050F9E /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AD444892382B252A75D641A7 /* AppIcon.icns in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		D1317CA3B78B882C1C28B68A /* Sources */ = {

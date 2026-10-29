@@ -3,3 +3,4 @@
 *.xcodeproj
 Support/Info.plist
 .DS_Store
+dist/
