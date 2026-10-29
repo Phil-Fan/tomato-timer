@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="Support/logo.png" width="120" alt="番茄钟 logo">
+</p>
+
 # 番茄钟
 
 一个 macOS 菜单栏番茄钟，SwiftUI + EventKit + Swift Charts，无第三方依赖。
@@ -95,7 +99,7 @@ spctl -a -vvv -t install dist/番茄钟.dmg
 
 ## 数据
 
-设置、分类、完成记录保存在 `UserDefaults`（bundle id `com.philfan.tomato`）。完成记录保留 400 天，可在「设置 → 通用 → 数据」里重置今日或清空全部。
+设置、分类、完成记录保存在 `UserDefaults`（bundle id `com.philfan.tomato`）。完成记录保留 400 天。
 
 ## 开发提示
 
