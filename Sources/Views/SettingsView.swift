@@ -31,6 +31,10 @@ struct SettingsView: View {
             .tabItem { Label("通用", systemImage: "gearshape") }
         }
         .frame(width: 640, height: 560)
+        .onAppear {
+            NSApp.activate()
+            NSApp.keyWindow?.makeKeyAndOrderFront(nil)
+        }
     }
 }
 
@@ -157,8 +161,7 @@ private struct CategorySettingsView: View {
                     CategoryRow(
                         categoryID: category.id,
                         store: categories,
-                        dailyTargetMinutes: settings.dailyTargetMinutes,
-                        canDelete: categories.items.count > 1
+                        dailyTargetMinutes: settings.dailyTargetMinutes
                     )
                 }
 
@@ -200,7 +203,6 @@ private struct CategoryRow: View {
     let categoryID: UUID
     var store: CategoryStore
     let dailyTargetMinutes: Int
-    let canDelete: Bool
 
     /// 本地草稿：中文输入法拼写过程中不写回模型，避免候选词被重绘打断。
     @State private var draftName = ""
@@ -208,6 +210,10 @@ private struct CategoryRow: View {
 
     private var category: FocusCategory? {
         store.category(id: categoryID)
+    }
+
+    private var canDelete: Bool {
+        store.items.count > 1
     }
 
     private var percentBinding: Binding<Int> {
@@ -282,9 +288,12 @@ private struct CategoryRow: View {
                 store.remove(id: categoryID)
             } label: {
                 Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .medium))
                     .foregroundStyle(canDelete ? Color.secondary : Color.secondary.opacity(0.3))
+                    .frame(width: 26, height: 22)
+                    .contentShape(Rectangle())
             }
-            .buttonStyle(.borderless)
+            .buttonStyle(.plain)
             .disabled(!canDelete)
             .help(canDelete ? "删除这个分类" : "至少保留一个分类")
         }
