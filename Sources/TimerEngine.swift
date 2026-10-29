@@ -174,6 +174,7 @@ final class TimerEngine {
         now = completedAt
 
         history.record(category: category, minutes: minutes, at: completedAt)
+        sendFeishuCard(category: category, minutes: minutes, completedAt: completedAt)
 
         if settings.writeToCalendar {
             let categoryName = category?.displayName ?? "专注"
@@ -198,6 +199,29 @@ final class TimerEngine {
     }
 
     // MARK: - 通知与声音
+
+    private func sendFeishuCard(category: FocusCategory?, minutes: Int, completedAt: Date) {
+        guard settings.feishuWebhookEnabled else { return }
+        let url = settings.feishuWebhookURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+
+        let config = FeishuWebhook.Config(
+            webhookURL: url,
+            secret: settings.feishuWebhookSecret
+        )
+        let summary = FeishuWebhook.Summary(
+            categoryName: category?.displayName ?? "专注",
+            minutes: minutes,
+            todayCount: history.todayCount,
+            todayMinutes: history.todayMinutes,
+            dailyTargetMinutes: settings.dailyTargetMinutes,
+            completedAt: completedAt
+        )
+
+        Task {
+            try? await FeishuWebhook.send(config: config, summary: summary)
+        }
+    }
 
     private var notificationID: String { "tomato.session" }
 

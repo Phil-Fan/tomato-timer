@@ -11,6 +11,9 @@ final class AppSettings {
         static let calendarID = "calendarID"
         static let lastCategoryID = "lastCategoryID"
         static let dailyTarget = "dailyTargetMinutes"
+        static let feishuEnabled = "feishuWebhookEnabled"
+        static let feishuURL = "feishuWebhookURL"
+        static let feishuSecret = "feishuWebhookSecret"
     }
 
     private let defaults: UserDefaults
@@ -32,6 +35,11 @@ final class AppSettings {
 
     /// 每天的目标专注总时长（分钟），在分类页里设置。
     var dailyTargetMinutes: Int { didSet { defaults.set(dailyTargetMinutes, forKey: Key.dailyTarget) } }
+
+    /// 完成后发送飞书群卡片。
+    var feishuWebhookEnabled: Bool { didSet { defaults.set(feishuWebhookEnabled, forKey: Key.feishuEnabled) } }
+    var feishuWebhookURL: String { didSet { defaults.set(feishuWebhookURL, forKey: Key.feishuURL) } }
+    var feishuWebhookSecret: String { didSet { defaults.set(feishuWebhookSecret, forKey: Key.feishuSecret) } }
 
     /// 开始卡片上一次选择的分类。
     var lastCategoryID: String? {
@@ -55,5 +63,9 @@ final class AppSettings {
 
         lastCategoryID = defaults.string(forKey: Key.lastCategoryID)
         dailyTargetMinutes = defaults.object(forKey: Key.dailyTarget) as? Int ?? 240
+
+        feishuWebhookEnabled = defaults.object(forKey: Key.feishuEnabled) as? Bool ?? false
+        feishuWebhookURL = defaults.string(forKey: Key.feishuURL) ?? ""
+        feishuWebhookSecret = defaults.string(forKey: Key.feishuSecret) ?? ""
     }
 }

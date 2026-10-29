@@ -44,8 +44,10 @@ private struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     var history: SessionHistory
 
-    @State private var showClearHistory = false
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
+    @State private var isTestingWebhook = false
+    @State private var webhookMessage: String?
+    @State private var webhookFailed = false
 
     var body: some View {
         Form {
@@ -80,14 +82,45 @@ private struct GeneralSettingsView: View {
                 Toggle("显示桌面悬浮球", isOn: $settings.showFloatingBall)
             }
 
-            Section("数据") {
-                Button("重置今日统计") {
-                    history.resetToday()
-                }
+            Section {
+                Toggle("完成后发送飞书卡片", isOn: $settings.feishuWebhookEnabled)
 
-                Button("清空全部历史", role: .destructive) {
-                    showClearHistory = true
+                TextField(
+                    "Webhook 地址",
+                    text: $settings.feishuWebhookURL,
+                    prompt: Text("https://open.feishu.cn/open-apis/bot/v2/hook/...")
+                )
+                .textFieldStyle(.roundedBorder)
+                .disabled(!settings.feishuWebhookEnabled)
+
+                SecureField("签名密钥（可选）", text: $settings.feishuWebhookSecret)
+                    .textFieldStyle(.roundedBorder)
+                    .disabled(!settings.feishuWebhookEnabled)
+
+                HStack(spacing: 10) {
+                    Button("发送测试卡片") {
+                        sendTestWebhook()
+                    }
+                    .disabled(!canTestWebhook)
+
+                    if isTestingWebhook {
+                        ProgressView()
+                            .controlSize(.small)
+                    }
+
+                    if let webhookMessage {
+                        Text(webhookMessage)
+                            .font(.caption)
+                            .foregroundStyle(webhookFailed ? Color.red : Color.secondary)
+                            .lineLimit(2)
+                    }
                 }
+            } header: {
+                Text("飞书")
+            } footer: {
+                Text("飞书群 → 设置 → 群机器人 → 添加自定义机器人，复制 Webhook 地址；如果机器人开启了签名校验，再填密钥。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
         }
         .formStyle(.grouped)
@@ -97,16 +130,45 @@ private struct GeneralSettingsView: View {
         .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
             Task { await refreshNotificationStatus() }
         }
-        .confirmationDialog(
-            "清空全部历史？",
-            isPresented: $showClearHistory
-        ) {
-            Button("清空", role: .destructive) {
-                history.clearAll()
+    }
+
+    private var canTestWebhook: Bool {
+        settings.feishuWebhookEnabled
+            && !settings.feishuWebhookURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !isTestingWebhook
+    }
+
+    private func sendTestWebhook() {
+        let url = settings.feishuWebhookURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !url.isEmpty else { return }
+
+        isTestingWebhook = true
+        webhookMessage = nil
+
+        let config = FeishuWebhook.Config(
+            webhookURL: url,
+            secret: settings.feishuWebhookSecret
+        )
+        let summary = FeishuWebhook.Summary(
+            categoryName: "测试分类",
+            minutes: 45,
+            todayCount: history.todayCount,
+            todayMinutes: history.todayMinutes,
+            dailyTargetMinutes: settings.dailyTargetMinutes,
+            completedAt: Date(),
+            isTest: true
+        )
+
+        Task {
+            do {
+                try await FeishuWebhook.send(config: config, summary: summary)
+                webhookMessage = "测试卡片已发送"
+                webhookFailed = false
+            } catch {
+                webhookMessage = error.localizedDescription
+                webhookFailed = true
             }
-            Button("取消", role: .cancel) {}
-        } message: {
-            Text("所有完成记录都会被删除，无法恢复。")
+            isTestingWebhook = false
         }
     }
 

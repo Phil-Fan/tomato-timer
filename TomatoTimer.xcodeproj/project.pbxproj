@@ -12,6 +12,7 @@
 		2B8CF3451CD498BE8BDE1B73 /* TimerEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = D228FAB53E5569571505FA5B /* TimerEngine.swift */; };
 		2CE179F5121CB8C68EA6355C /* StatsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 70D4E55D51BF794B27975098 /* StatsView.swift */; };
 		43453697D5CB7CB7376D4681 /* SettingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5861DB3DD8724BCB85E1991 /* SettingsView.swift */; };
+		49B50CDFAC2AD019D2938367 /* FeishuWebhook.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DDA70AAB409081B0353B0A /* FeishuWebhook.swift */; };
 		4D6B6DC735E6FAA780D7B15A /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409ECA0637674761198C20E1 /* AppSettings.swift */; };
 		5165B9A12CB4AD6D42040AD2 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5601CC57DD2693C9DD8FCA /* NotificationScheduler.swift */; };
 		851AB7743DE4432993CA37BD /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76AE39B5A74681E51C9104B0 /* CategoryStore.swift */; };
@@ -38,6 +39,7 @@
 		C910FB0BDD9A7F2FB75BD216 /* TomatoTimerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomatoTimerApp.swift; sourceTree = "<group>"; };
 		D228FAB53E5569571505FA5B /* TimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerEngine.swift; sourceTree = "<group>"; };
 		D28FDF487D587B4A91FE777F /* TomatoTimer.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = TomatoTimer.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D4DDA70AAB409081B0353B0A /* FeishuWebhook.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeishuWebhook.swift; sourceTree = "<group>"; };
 		D784E80590C07FC688736A0C /* CalendarService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CalendarService.swift; sourceTree = "<group>"; };
 		DA5FE602FAC7E4344DF926A4 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
 		FB5601CC57DD2693C9DD8FCA /* NotificationScheduler.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NotificationScheduler.swift; sourceTree = "<group>"; };
@@ -88,6 +90,7 @@
 				409ECA0637674761198C20E1 /* AppSettings.swift */,
 				D784E80590C07FC688736A0C /* CalendarService.swift */,
 				76AE39B5A74681E51C9104B0 /* CategoryStore.swift */,
+				D4DDA70AAB409081B0353B0A /* FeishuWebhook.swift */,
 				430A4FA2533E322DD6778AAC /* FloatingBall.swift */,
 				DA5FE602FAC7E4344DF926A4 /* Models.swift */,
 				FB5601CC57DD2693C9DD8FCA /* NotificationScheduler.swift */,
@@ -173,6 +176,7 @@
 				4D6B6DC735E6FAA780D7B15A /* AppSettings.swift in Sources */,
 				1AFAC0FB1BE9BE8D185B992E /* CalendarService.swift in Sources */,
 				851AB7743DE4432993CA37BD /* CategoryStore.swift in Sources */,
+				49B50CDFAC2AD019D2938367 /* FeishuWebhook.swift in Sources */,
 				A14DBA312D57BD221FA20365 /* FloatingBall.swift in Sources */,
 				CC6087F94DE4B4F8C2A8B4AE /* Models.swift in Sources */,
 				5165B9A12CB4AD6D42040AD2 /* NotificationScheduler.swift in Sources */,
