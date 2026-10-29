@@ -38,7 +38,14 @@ struct TomatoTimerApp: App {
             PopoverView(model: appDelegate.model)
                 .frame(width: 320)
         } label: {
-            Text(appDelegate.model.engine.menuBarLabel)
+            HStack(spacing: 4) {
+                Image(systemName: appDelegate.model.engine.menuBarSymbol)
+
+                if !appDelegate.model.engine.menuBarText.isEmpty {
+                    Text(appDelegate.model.engine.menuBarText)
+                        .monospacedDigit()
+                }
+            }
         }
         .menuBarExtraStyle(.window)
 

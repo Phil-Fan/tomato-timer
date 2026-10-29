@@ -7,16 +7,35 @@ import SwiftUI
 enum FloatingLayout {
     static let ballSize: CGFloat = 68
     static let cardWidth: CGFloat = 320
-    static let cardHeight: CGFloat = 390
-    static let margin: CGFloat = 12
+    /// 计时 / 暂停面板高度。
+    static let timerCardHeight: CGFloat = 390
+    /// 只有分类和开始按钮时的紧凑高度。
+    static let compactCardHeight: CGFloat = 196
+    static let margin: CGFloat = 16
     static let cornerRadius: CGFloat = 24
 
     static var collapsedSize: NSSize {
         NSSize(width: ballSize + margin * 2, height: ballSize + margin * 2)
     }
 
-    static var expandedSize: NSSize {
-        NSSize(width: cardWidth + margin * 2, height: cardHeight + margin * 2)
+    static func cardHeight(hasStarted: Bool) -> CGFloat {
+        hasStarted ? timerCardHeight : compactCardHeight
+    }
+
+    static func expandedSize(hasStarted: Bool) -> NSSize {
+        NSSize(
+            width: cardWidth + margin * 2,
+            height: cardHeight(hasStarted: hasStarted) + margin * 2
+        )
+    }
+
+    /// 内容视图始终保持最大展开尺寸：窗口放大缩小时只裁剪，不重新布局内容，
+    /// 避免窗口动画期间 SwiftUI 图层被拉伸产生的“跳一下”。
+    static var hostingSize: NSSize {
+        NSSize(
+            width: cardWidth + margin * 2,
+            height: max(timerCardHeight, compactCardHeight) + margin * 2
+        )
     }
 }
 
@@ -30,6 +49,20 @@ final class FloatingBallState {
 }
 
 // MARK: - 面板
+
+/// 接受“第一次点击”的宿主视图，应用不在前台时点球也能立即展开。
+final class FloatingHostingView: NSHostingView<AnyView> {
+    override func acceptsFirstMouse(for event: NSEvent?) -> Bool { true }
+
+    required init(rootView: AnyView) {
+        super.init(rootView: rootView)
+    }
+
+    @available(*, unavailable)
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+}
 
 /// 无边框浮动面板：收起时整块面板就是一个可拖拽的球，展开时承载完整界面。
 final class FloatingPanel: NSPanel {
@@ -92,7 +125,7 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
     private let model: AppModel
     private let state = FloatingBallState()
     private let panel: FloatingPanel
-    private let hostingView: NSHostingView<AnyView>
+    private let hostingView: FloatingHostingView
     private var collapsedFrame: NSRect
     private var idleTask: Task<Void, Never>?
     private var saveTask: Task<Void, Never>?
@@ -106,11 +139,11 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
         self.collapsedFrame = initialFrame
         self.panel = FloatingPanel(
             contentRect: initialFrame,
-            styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
+            styleMask: [.borderless, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        self.hostingView = NSHostingView(rootView: AnyView(EmptyView()))
+        self.hostingView = FloatingHostingView(rootView: AnyView(EmptyView()))
 
         super.init()
 
@@ -151,6 +184,13 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
         let target = clamped(collapsedFrame, size: FloatingLayout.collapsedSize)
         collapsedFrame = target
         animate(to: target, animated: animated)
+        schedulePositionSave()
+    }
+
+    /// 开始卡片和计时面板高度不同，状态切换时同步面板尺寸。
+    func contentHeightDidChange() {
+        guard state.isExpanded else { return }
+        animate(to: expandedFrame(anchoredTo: collapsedFrame))
     }
 
     /// 面板内仍有鼠标活动时重新计时，长时间无操作就收回成球。
@@ -211,18 +251,34 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
             state: state,
             onExpand: { [weak self] in self?.expand() },
             onCollapse: { [weak self] in self?.collapse() },
-            onInteraction: { [weak self] in self?.noteInteraction() }
+            onInteraction: { [weak self] in self?.noteInteraction() },
+            onResize: { [weak self] in self?.contentHeightDidChange() }
         )
         hostingView.rootView = AnyView(root)
-        hostingView.frame = panel.contentLayoutRect
-        hostingView.autoresizingMask = [.width, .height]
-        panel.contentView = hostingView
+        hostingView.autoresizingMask = [.minXMargin, .minYMargin]
+
+        let container = NSView()
+        container.wantsLayer = true
+        panel.contentView = container
+        container.addSubview(hostingView)
+        positionHostingView(in: container.bounds)
+    }
+
+    /// 内容视图固定为最大展开尺寸，并贴住窗口右上角；窗口变小时由窗口裁剪。
+    private func positionHostingView(in bounds: NSRect) {
+        let size = FloatingLayout.hostingSize
+        hostingView.frame = NSRect(
+            x: bounds.maxX - size.width,
+            y: bounds.maxY - size.height,
+            width: size.width,
+            height: size.height
+        )
     }
 
     // MARK: 几何
 
     private func expandedFrame(anchoredTo collapsed: NSRect) -> NSRect {
-        let size = FloatingLayout.expandedSize
+        let size = FloatingLayout.expandedSize(hasStarted: model.engine.hasStarted)
         let frame = NSRect(
             x: collapsed.maxX - size.width,
             y: collapsed.maxY - size.height,
@@ -263,8 +319,8 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
 
         if animated {
             NSAnimationContext.runAnimationGroup { context in
-                context.duration = 0.26
-                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                context.duration = 0.32
+                context.timingFunction = CAMediaTimingFunction(controlPoints: 0.22, 1, 0.36, 1)
                 panel.animator().setFrame(frame, display: true)
             }
         } else {
@@ -273,7 +329,7 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
 
         Task { @MainActor [weak self] in
             if animated {
-                try? await Task.sleep(for: .milliseconds(320))
+                try? await Task.sleep(for: .milliseconds(380))
             }
             guard let self, self.animationID == currentAnimation else { return }
             self.isAnimating = false
@@ -296,7 +352,7 @@ final class FloatingBallController: NSObject, NSWindowDelegate {
     }
 
     private func savePosition() {
-        let center = NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        let center = NSPoint(x: collapsedFrame.midX, y: collapsedFrame.midY)
         UserDefaults.standard.set([Double(center.x), Double(center.y)], forKey: Self.positionKey)
     }
 
@@ -343,12 +399,23 @@ struct FloatingRootView: View {
     let onExpand: () -> Void
     let onCollapse: () -> Void
     let onInteraction: () -> Void
+    let onResize: () -> Void
+
+    private var cardHeight: CGFloat {
+        FloatingLayout.cardHeight(hasStarted: model.engine.hasStarted)
+    }
 
     var body: some View {
         ZStack(alignment: .topTrailing) {
             if state.isExpanded {
                 expandedCard
-                    .transition(.opacity.combined(with: .scale(scale: 0.92, anchor: .topTrailing)))
+                    // 展开时卡片直接就位，由窗口尺寸动画把它从左下方向“揭开”。
+                    .transition(
+                        .asymmetric(
+                            insertion: .identity,
+                            removal: .opacity.animation(.easeIn(duration: 0.1))
+                        )
+                    )
             } else {
                 FloatingBallView(model: model, isHovering: state.isHovering)
                     .onHover { hovering in
@@ -356,16 +423,30 @@ struct FloatingRootView: View {
                         if hovering { onInteraction() }
                     }
                     .padding(FloatingLayout.margin)
-                    .transition(.opacity.combined(with: .scale(scale: 0.86, anchor: .topTrailing)))
+                    // 展开时球留在卡片上层淡出缩小，像被卡片“吞掉”。
+                    .transition(ballTransition)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-        .animation(.spring(response: 0.3, dampingFraction: 0.86), value: state.isExpanded)
+        .animation(.spring(response: 0.3, dampingFraction: 0.86), value: cardHeight)
+        .onChange(of: model.engine.hasStarted) { _, _ in
+            guard state.isExpanded else { return }
+            onResize()
+        }
+    }
+
+    private var ballTransition: AnyTransition {
+        .asymmetric(
+            insertion: .opacity.animation(.easeOut(duration: 0.14)),
+            removal: .opacity
+                .combined(with: .scale(scale: 0.72, anchor: .topTrailing))
+                .animation(.easeOut(duration: 0.22))
+        )
     }
 
     private var expandedCard: some View {
         PopoverView(model: model, onCollapse: onCollapse)
-            .frame(width: FloatingLayout.cardWidth, height: FloatingLayout.cardHeight)
+            .frame(width: FloatingLayout.cardWidth, height: cardHeight)
             .background {
                 RoundedRectangle(cornerRadius: FloatingLayout.cornerRadius, style: .continuous)
                     .fill(.regularMaterial)
@@ -377,7 +458,7 @@ struct FloatingRootView: View {
             .clipShape(
                 RoundedRectangle(cornerRadius: FloatingLayout.cornerRadius, style: .continuous)
             )
-            .shadow(color: .black.opacity(0.24), radius: 16, y: 8)
+            .shadow(color: .black.opacity(0.24), radius: 12, y: 4)
             .padding(FloatingLayout.margin)
             .onContinuousHover { _ in
                 onInteraction()
@@ -401,7 +482,7 @@ struct FloatingBallView: View {
     }
 
     private var statusText: String {
-        return engine.isRunning ? "专注" : "暂停"
+        engine.isRunning ? "专注" : "暂停"
     }
 
     private var accessibilityLabel: String {
@@ -438,7 +519,7 @@ struct FloatingBallView: View {
             content
         }
         .frame(width: FloatingLayout.ballSize, height: FloatingLayout.ballSize)
-        .shadow(color: tint.opacity(0.42), radius: isHovering ? 14 : 9, y: 4)
+        .shadow(color: tint.opacity(0.42), radius: isHovering ? 12 : 8, y: 3)
         .scaleEffect(isHovering ? 1.06 : 1)
         .animation(.spring(response: 0.28, dampingFraction: 0.7), value: isHovering)
         .help("点击展开 · 拖动移动")
@@ -461,8 +542,8 @@ struct FloatingBallView: View {
             }
             .foregroundStyle(.white)
         } else {
-            Text(engine.sessionEmoji)
-                .font(.system(size: 28))
+            Image(systemName: engine.menuBarSymbol)
+                .font(.system(size: 24, weight: .medium))
         }
     }
 }

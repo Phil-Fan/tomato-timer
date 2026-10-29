@@ -12,7 +12,6 @@ struct PopoverView: View {
 
     private var engine: TimerEngine { model.engine }
     private var settings: AppSettings { model.settings }
-    private var history: SessionHistory { model.history }
     private var calendar: CalendarService { model.calendar }
     private var categories: CategoryStore { model.categories }
 
@@ -28,21 +27,26 @@ struct PopoverView: View {
         return TomatoTheme.focus
     }
 
+    /// 默认选中占比最大的分类。
+    private var defaultCategoryID: UUID? {
+        categories.items
+            .max { $0.ratio < $1.ratio }?
+            .id
+    }
+
     var body: some View {
         VStack(spacing: 16) {
             if showingStartCard {
+                Spacer(minLength: 0)
                 startCard
+                Spacer(minLength: 0)
             } else {
                 header
+                Spacer(minLength: 8)
                 ring
+                Spacer(minLength: 8)
                 controls
             }
-
-            Spacer(minLength: 0)
-
-            Divider()
-
-            footer
         }
         .padding(18)
         .frame(maxWidth: .infinity)
@@ -51,53 +55,136 @@ struct PopoverView: View {
         }
         .onAppear {
             calendar.refresh()
-
-            if selectedCategoryID == nil {
-                selectedCategoryID = categories.category(rawID: settings.lastCategoryID)?.id
-                    ?? categories.items.first?.id
-            }
+            selectedCategoryID = defaultCategoryID
         }
     }
 
     // MARK: - 开始
 
+    private let chipSpacing: CGFloat = 8
+    private let chipMinWidth: CGFloat = 46
+    private let chipHeight: CGFloat = 58
+
     private var startCard: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("开始专注")
-                    .font(.title3.weight(.semibold))
-                Text("45 分钟 · 今日已完成 \(history.todayCount) 个")
-                    .font(.callout)
-                    .foregroundStyle(.secondary)
+        VStack(alignment: .leading, spacing: 0) {
+            HStack(spacing: 0) {
+                Spacer(minLength: 0)
+                settingsButton
             }
+            .frame(height: 16)
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text("分类")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+            GeometryReader { proxy in
+                let widths = chipWidths(totalWidth: proxy.size.width)
 
-                Picker("分类", selection: $selectedCategoryID) {
-                    ForEach(categories.items) { category in
-                        Text("\(category.emoji)  \(category.name)")
-                            .tag(Optional(category.id))
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: chipSpacing) {
+                        ForEach(Array(categories.items.enumerated()), id: \.element.id) { index, category in
+                            categoryChip(category)
+                                .frame(width: widths[index])
+                        }
                     }
                 }
-                .labelsHidden()
-                .pickerStyle(.menu)
+                .defaultScrollAnchor(.center)
             }
+            .frame(height: chipHeight)
+            .padding(.top, 10)
 
             Button {
                 beginFocus()
             } label: {
                 Label("开始专注", systemImage: "play.fill")
+                    .font(.system(size: 17, weight: .semibold))
                     .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
             }
             .buttonStyle(.borderedProminent)
-            .controlSize(.large)
-            .tint(tint)
+            .controlSize(.extraLarge)
+            .tint(.red)
             .keyboardShortcut(.defaultAction)
             .disabled(categories.items.isEmpty)
+            .padding(.top, 16)
         }
+    }
+
+    private var settingsButton: some View {
+        Button(action: openSettingsWindow) {
+            Image(systemName: "gearshape")
+                .font(.system(size: 12, weight: .medium))
+                .foregroundStyle(.secondary)
+                .frame(width: 20, height: 16)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("设置")
+        .accessibilityLabel("设置")
+    }
+
+    /// 每张分类卡的宽度按目标占比分配。
+    private func chipWidths(totalWidth: CGFloat) -> [CGFloat] {
+        let items = categories.items
+        guard !items.isEmpty else { return [] }
+
+        let usable = max(0, totalWidth - chipSpacing * CGFloat(items.count - 1))
+        let weights = items.map { CGFloat(max(0, $0.ratio)) }
+        let totalWeight = weights.reduce(0, +)
+
+        var widths: [CGFloat]
+        if totalWeight > 0 {
+            widths = weights.map { max(chipMinWidth, usable * $0 / totalWeight) }
+        } else {
+            widths = Array(repeating: max(chipMinWidth, usable / CGFloat(items.count)), count: items.count)
+        }
+
+        // 保底宽度会让总和超出可用空间，把多出的部分按各卡超出保底的份额收回。
+        let overflow = widths.reduce(0, +) - usable
+        if overflow > 0 {
+            let excess = widths.map { max(0, $0 - chipMinWidth) }
+            let totalExcess = excess.reduce(0, +)
+            if totalExcess > 0 {
+                widths = zip(widths, excess).map { width, extra in
+                    max(chipMinWidth, width - overflow * extra / totalExcess)
+                }
+            }
+        }
+
+        return widths
+    }
+
+    private func categoryChip(_ category: FocusCategory) -> some View {
+        let selected = category.id == selectedCategoryID
+
+        return Button {
+            selectedCategoryID = category.id
+        } label: {
+            VStack(spacing: 5) {
+                Image(systemName: category.symbol)
+                    .font(.system(size: 16, weight: .semibold))
+
+                Text(category.displayName)
+                    .font(.caption.weight(selected ? .semibold : .regular))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
+            }
+            .foregroundStyle(selected ? category.tint : Color.secondary)
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(selected ? category.tint.opacity(0.16) : Color.primary.opacity(0.05))
+            }
+            .overlay {
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(
+                        selected ? category.tint.opacity(0.9) : Color.primary.opacity(0.06),
+                        lineWidth: selected ? 1.5 : 1
+                    )
+            }
+            .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .help(category.displayName)
+        .accessibilityAddTraits(selected ? .isSelected : [])
+        .animation(.easeOut(duration: 0.15), value: selected)
     }
 
     private func beginFocus() {
@@ -113,7 +200,11 @@ struct PopoverView: View {
     // MARK: - 计时
 
     private var header: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 6) {
+            Image(systemName: engine.menuBarSymbol)
+                .font(.system(size: 11))
+                .foregroundStyle(tint)
+
             Text(engine.sessionTitle)
                 .font(.subheadline.weight(.medium))
                 .foregroundStyle(.secondary)
@@ -123,6 +214,9 @@ struct PopoverView: View {
             Text("45 分钟")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
+
+            settingsButton
+                .padding(.leading, 2)
         }
     }
 
@@ -142,16 +236,16 @@ struct PopoverView: View {
 
             VStack(spacing: 2) {
                 Text(engine.timeString)
-                    .font(.system(size: 42, weight: .semibold, design: .rounded))
+                    .font(.system(size: 52, weight: .semibold, design: .rounded))
                     .monospacedDigit()
                     .contentTransition(.numericText())
 
                 Text(subtitle)
-                    .font(.caption)
+                    .font(.subheadline)
                     .foregroundStyle(.secondary)
             }
         }
-        .frame(width: 180, height: 180)
+        .frame(width: 196, height: 196)
         .accessibilityElement(children: .combine)
         .accessibilityLabel("\(engine.sessionTitle)，剩余 \(engine.timeString)")
     }
@@ -191,50 +285,7 @@ struct PopoverView: View {
         }
     }
 
-    // MARK: - 底栏
-
-    private var footer: some View {
-        HStack(spacing: 10) {
-            Text("今日 \(history.todayCount) 个 · \(history.todayMinutes) 分钟")
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .monospacedDigit()
-                .help("今日完成的番茄数与专注分钟数")
-
-            Spacer()
-
-            if let onCollapse {
-                Button(action: onCollapse) {
-                    Image(systemName: "arrow.down.right.and.arrow.up.left")
-                }
-                .buttonStyle(.borderless)
-                .help("收起为悬浮球")
-            }
-
-            if settings.writeToCalendar {
-                Image(systemName: calendar.isAuthorized ? "calendar.badge.checkmark" : "calendar.badge.exclamationmark")
-                    .font(.caption)
-                    .foregroundStyle(calendar.isAuthorized ? Color.secondary : Color.orange)
-                    .help(calendar.isAuthorized ? "完成的番茄会写入日历" : "日历未授权，请在设置里处理")
-            }
-
-            Button(action: openSettingsWindow) {
-                Image(systemName: "gearshape")
-            }
-            .buttonStyle(.borderless)
-            .help("设置")
-
-            Button {
-                NSApp.terminate(nil)
-            } label: {
-                Image(systemName: "power")
-            }
-            .buttonStyle(.borderless)
-            .help("退出番茄钟")
-        }
-        .font(.caption)
-        .foregroundStyle(.secondary)
-    }
+    // MARK: - 设置
 
     private func openSettingsWindow() {
         onCollapse?()
