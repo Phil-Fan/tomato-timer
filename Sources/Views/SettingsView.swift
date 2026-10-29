@@ -6,8 +6,12 @@ struct SettingsView: View {
 
     var body: some View {
         TabView {
-            TimerSettingsView(settings: model.settings)
-                .tabItem { Label("计时", systemImage: "timer") }
+            StatsView(
+                settings: model.settings,
+                history: model.history,
+                categories: model.categories
+            )
+            .tabItem { Label("统计", systemImage: "chart.pie") }
 
             CategorySettingsView(categories: model.categories)
                 .tabItem { Label("分类", systemImage: "square.grid.2x2") }
@@ -15,43 +19,65 @@ struct SettingsView: View {
             CalendarSettingsView(settings: model.settings, calendar: model.calendar)
                 .tabItem { Label("日历", systemImage: "calendar") }
 
-            GeneralSettingsView(settings: model.settings, stats: model.stats)
+            GeneralSettingsView(settings: model.settings, history: model.history)
                 .tabItem { Label("通用", systemImage: "gearshape") }
         }
-        .frame(width: 560, height: 470)
+        .frame(width: 660, height: 620)
     }
 }
 
-// MARK: - 计时
+// MARK: - 通用（计时 + 提醒 + 显示 + 数据）
 
-private struct TimerSettingsView: View {
+private struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
+    var history: SessionHistory
+
+    @State private var showClearHistory = false
 
     var body: some View {
         Form {
             Section {
-                Stepper("专注时长：\(settings.focusMinutes) 分钟", value: $settings.focusMinutes, in: 1...120)
-                Stepper("短休息：\(settings.shortBreakMinutes) 分钟", value: $settings.shortBreakMinutes, in: 1...60)
-                Stepper("长休息：\(settings.longBreakMinutes) 分钟", value: $settings.longBreakMinutes, in: 1...90)
-                Stepper("每 \(settings.longBreakEvery) 个番茄后长休息", value: $settings.longBreakEvery, in: 2...12)
+                Toggle("结束时发送通知并播放提示音", isOn: $settings.notificationsEnabled)
+                    .onChange(of: settings.notificationsEnabled) { _, enabled in
+                        if enabled {
+                            Task { _ = await NotificationScheduler.requestAuthorization() }
+                        }
+                    }
             } header: {
-                Text("时长")
+                Text("提醒")
             } footer: {
-                Text("修改时长后，尚未开始的阶段会立即使用新时长。")
+                Text("关闭后不再发送系统通知，也不会播放提示音。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
 
-            Section("自动开始") {
-                Toggle("专注结束后自动开始休息", isOn: $settings.autoStartBreaks)
-                Toggle("休息结束后自动开始专注", isOn: $settings.autoStartFocus)
+            Section("显示") {
+                Toggle("在菜单栏显示剩余时间", isOn: $settings.showTimeInMenuBar)
+                Toggle("显示桌面悬浮球", isOn: $settings.showFloatingBall)
             }
 
-            Section("菜单栏") {
-                Toggle("在菜单栏显示剩余时间", isOn: $settings.showTimeInMenuBar)
+            Section("数据") {
+                Button("重置今日统计") {
+                    history.resetToday()
+                }
+
+                Button("清空全部历史", role: .destructive) {
+                    showClearHistory = true
+                }
             }
         }
         .formStyle(.grouped)
+        .confirmationDialog(
+            "清空全部历史？",
+            isPresented: $showClearHistory
+        ) {
+            Button("清空", role: .destructive) {
+                history.clearAll()
+            }
+            Button("取消", role: .cancel) {}
+        } message: {
+            Text("所有完成记录都会被删除，无法恢复。")
+        }
     }
 }
 
@@ -59,6 +85,10 @@ private struct TimerSettingsView: View {
 
 private struct CategorySettingsView: View {
     @Bindable var categories: CategoryStore
+
+    private var totalPercent: Int {
+        categories.items.reduce(0) { $0 + Int(($1.ratio * 100).rounded()) }
+    }
 
     var body: some View {
         Form {
@@ -77,10 +107,22 @@ private struct CategorySettingsView: View {
                     Label("添加分类", systemImage: "plus")
                 }
                 .disabled(categories.items.count >= 8)
+
+                HStack {
+                    Text("目标合计")
+                    Spacer()
+                    Text("\(totalPercent)%")
+                        .monospacedDigit()
+                        .foregroundStyle(totalPercent == 100 ? Color.secondary : Color.orange)
+                    Button("平均分配") {
+                        categories.averageRatios()
+                    }
+                    .controlSize(.small)
+                }
             } header: {
                 Text("专注分类")
             } footer: {
-                Text("开始番茄时可以从这些分类里选一个，分类名称会写进日历标题。最多 8 个。")
+                Text("分类名称会写进日历标题；右边的百分比是每天的目标占比。合计不是 100% 时，图表会按相对比例换算。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -94,6 +136,13 @@ private struct CategoryRow: View {
     let canDelete: Bool
     let onDelete: () -> Void
 
+    private var percentBinding: Binding<Int> {
+        Binding(
+            get: { Int((category.ratio * 100).rounded()) },
+            set: { category.ratio = Double($0) / 100 }
+        )
+    }
+
     var body: some View {
         HStack(spacing: 10) {
             TextField("", text: $category.emoji)
@@ -105,7 +154,15 @@ private struct CategoryRow: View {
             TextField("分类名称", text: $category.name)
                 .textFieldStyle(.plain)
 
-            Spacer(minLength: 4)
+            Spacer(minLength: 8)
+
+            Stepper(value: percentBinding, in: 0...100, step: 5) {
+                Text("\(Int((category.ratio * 100).rounded()))%")
+                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
+            }
+            .controlSize(.small)
+            .fixedSize()
 
             Button(role: .destructive, action: onDelete) {
                 Image(systemName: "trash")
@@ -138,17 +195,10 @@ private struct CalendarSettingsView: View {
                     }
                 }
                 .disabled(!settings.writeToCalendar || calendar.calendars.isEmpty)
-
-                TextField("日程标题", text: $settings.eventTitleTemplate)
-                    .disabled(!settings.writeToCalendar)
-
-                Text("占位符：{category} = 分类，{minutes} = 本次分钟数，{count} = 今日第几个番茄")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
             } header: {
                 Text("写入")
             } footer: {
-                Text("只记录完整结束的番茄；重置或跳过的阶段不会写入。")
+                Text("只记录完整结束的番茄，标题会自动带上分类和时长。")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -180,14 +230,11 @@ private struct CalendarSettingsView: View {
                 }
             }
 
-            Section("怎么接上 Google / 飞书") {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Google：系统设置 → 互联网账户 → 添加 Google 账户，勾选「日历」。之后这里会出现该账户下的日历。")
-                    Text("飞书：飞书 → 日历 → 添加日历 → 添加第三方日历 → 谷歌日历，登录同一个 Google 账号即可看到这些专注记录。")
-                }
-                .font(.caption)
-                .foregroundStyle(.secondary)
-                .fixedSize(horizontal: false, vertical: true)
+            Section("提示") {
+                Text("在系统设置 → 互联网账户中添加 Google 账号后，这里会出现该账户下的日历。飞书可以在「添加第三方日历 → 谷歌日历」中查看这些专注记录。")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .formStyle(.grouped)
@@ -207,47 +254,5 @@ private struct CalendarSettingsView: View {
                 Task { await calendar.requestAccess() }
             }
         }
-    }
-}
-
-// MARK: - 通用
-
-private struct GeneralSettingsView: View {
-    @Bindable var settings: AppSettings
-    var stats: StatsStore
-
-    var body: some View {
-        Form {
-            Section("提醒") {
-                Toggle("结束时发送系统通知", isOn: $settings.notificationsEnabled)
-                    .onChange(of: settings.notificationsEnabled) { _, enabled in
-                        if enabled {
-                            Task { _ = await NotificationScheduler.requestAuthorization() }
-                        }
-                    }
-                Toggle("结束时播放提示音", isOn: $settings.playSound)
-            }
-
-            Section("今日") {
-                LabeledContent("完成番茄") {
-                    Text("\(stats.count) 个")
-                        .monospacedDigit()
-                }
-                LabeledContent("专注时长") {
-                    Text("\(stats.minutes) 分钟")
-                        .monospacedDigit()
-                }
-                Button("重置今日统计") {
-                    stats.resetToday()
-                }
-            }
-
-            Section {
-                Button("退出番茄钟") {
-                    NSApp.terminate(nil)
-                }
-            }
-        }
-        .formStyle(.grouped)
     }
 }

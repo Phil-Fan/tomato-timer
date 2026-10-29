@@ -6,26 +6,24 @@ import Observation
 @Observable
 final class TimerEngine {
     private let settings: AppSettings
-    private let stats: StatsStore
+    private let history: SessionHistory
     private let calendar: CalendarService
     private let categories: CategoryStore
 
-    private(set) var phase: Phase = .focus
     private(set) var isRunning = false
     private(set) var hasStarted = false
-    private(set) var completedInCycle = 0
     private(set) var activeCategory: FocusCategory?
     private(set) var now = Date()
 
     private var endDate: Date?
     private var pausedRemaining: TimeInterval?
     private var sessionStart: Date?
-    private var plannedDuration: TimeInterval?
+    private var plannedDuration: TimeInterval = Pomodoro.focusSeconds
     private var ticker: Task<Void, Never>?
 
-    init(settings: AppSettings, stats: StatsStore, calendar: CalendarService, categories: CategoryStore) {
+    init(settings: AppSettings, history: SessionHistory, calendar: CalendarService, categories: CategoryStore) {
         self.settings = settings
-        self.stats = stats
+        self.history = history
         self.calendar = calendar
         self.categories = categories
         startTicker()
@@ -34,23 +32,18 @@ final class TimerEngine {
     // MARK: - 派生状态
 
     var sessionTitle: String {
-        if phase == .focus, let activeCategory {
+        if let activeCategory {
             return "\(activeCategory.emoji) \(activeCategory.name)"
         }
-        return phase.title
+        return "专注"
     }
 
     var sessionEmoji: String {
-        activeCategory?.emoji ?? phase.emoji
+        activeCategory?.emoji ?? "🍅"
     }
 
-    var totalSeconds: TimeInterval {
-        Double(settings.durationMinutes(for: phase) * 60)
-    }
-
-    /// 当前这段会话计划的总时长（允许单次覆盖设置里的默认时长）。
     var sessionTotalSeconds: TimeInterval {
-        plannedDuration ?? totalSeconds
+        max(1, plannedDuration)
     }
 
     var remainingSeconds: TimeInterval {
@@ -60,10 +53,10 @@ final class TimerEngine {
         if let pausedRemaining {
             return max(0, pausedRemaining)
         }
-        if let plannedDuration {
-            return max(0, plannedDuration)
+        if hasStarted {
+            return plannedDuration
         }
-        return totalSeconds
+        return Pomodoro.focusSeconds
     }
 
     var progress: Double {
@@ -77,15 +70,9 @@ final class TimerEngine {
         return String(format: "%02d:%02d", total / 60, total % 60)
     }
 
-    var cycleDots: Int {
-        let every = max(1, settings.longBreakEvery)
-        if phase == .longBreak { return every }
-        return completedInCycle % every
-    }
-
     var menuBarLabel: String {
         guard settings.showTimeInMenuBar, isRunning || hasStarted else {
-            return sessionEmoji
+            return "🍅"
         }
         return "\(sessionEmoji) \(timeString)"
     }
@@ -96,23 +83,10 @@ final class TimerEngine {
         isRunning ? pause() : resume()
     }
 
-    /// 从开始卡片进入一次专注。
-    func startFocus(minutes: Int, category: FocusCategory?) {
-        clearSessionState()
-        phase = .focus
+    func startFocus(category: FocusCategory?, durationMinutes: Int = Pomodoro.focusMinutes) {
+        clearSession()
         activeCategory = category
-        plannedDuration = TimeInterval(max(1, minutes) * 60)
-        sessionStart = Date()
-        begin()
-    }
-
-    /// 自动开始当前的休息阶段。
-    func startBreak() {
-        clearSessionState()
-        if phase == .focus {
-            phase = .shortBreak
-        }
-        plannedDuration = Double(settings.durationMinutes(for: phase) * 60)
+        plannedDuration = TimeInterval(max(1, durationMinutes) * 60)
         sessionStart = Date()
         begin()
     }
@@ -120,19 +94,16 @@ final class TimerEngine {
     func resume() {
         guard !isRunning else { return }
 
-        if sessionStart == nil {
-            sessionStart = Date()
-            plannedDuration = totalSeconds
-            if phase == .focus, activeCategory == nil {
-                activeCategory = preferredCategory
-            }
+        if !hasStarted {
+            startFocus(category: preferredCategory)
+            return
         }
         begin()
     }
 
     private func begin() {
         guard !isRunning else { return }
-        let duration = pausedRemaining ?? plannedDuration ?? totalSeconds
+        let duration = pausedRemaining ?? plannedDuration
         guard duration > 0 else { return }
 
         if sessionStart == nil { sessionStart = Date() }
@@ -158,14 +129,7 @@ final class TimerEngine {
     }
 
     func reset() {
-        clearSessionState()
-    }
-
-    /// 跳过当前阶段：不记录、不计入番茄数。
-    func skip() {
-        let wasFocus = phase == .focus
-        clearSessionState()
-        phase = wasFocus ? .shortBreak : .focus
+        clearSession()
     }
 
     // MARK: - 计时
@@ -190,22 +154,21 @@ final class TimerEngine {
         categories.category(rawID: settings.lastCategoryID) ?? categories.items.first
     }
 
-    private func clearSessionState() {
+    private func clearSession() {
         NotificationScheduler.cancel(id: notificationID)
         isRunning = false
         hasStarted = false
         endDate = nil
         pausedRemaining = nil
         sessionStart = nil
-        plannedDuration = nil
         activeCategory = nil
+        plannedDuration = Pomodoro.focusSeconds
         now = Date()
     }
 
     private func complete() {
-        let finished = phase
         let completedAt = Date()
-        let duration = plannedDuration ?? totalSeconds
+        let duration = plannedDuration
         let minutes = max(1, Int((duration / 60).rounded()))
         let category = activeCategory
 
@@ -215,46 +178,28 @@ final class TimerEngine {
         pausedRemaining = nil
         now = completedAt
 
-        if finished == .focus {
-            completedInCycle += 1
-            stats.recordFocus(minutes: minutes)
+        history.record(category: category, minutes: minutes, at: completedAt)
 
-            if settings.writeToCalendar {
-                let categoryName = category?.name ?? "专注"
-                let title = settings.resolvedTitle(
-                    minutes: minutes,
-                    count: stats.count,
-                    category: categoryName
-                )
-                let formatter = DateFormatter()
-                formatter.locale = Locale(identifier: "zh_CN")
-                formatter.dateFormat = "HH:mm"
-                let notes = "分类：\(categoryName) · 第 \(stats.count) 个番茄 · 完成于 \(formatter.string(from: completedAt))"
-                calendar.writeFocus(
-                    start: completedAt.addingTimeInterval(-duration),
-                    end: completedAt,
-                    title: title,
-                    notes: notes,
-                    calendarID: settings.calendarID
-                )
-            }
-
-            phase = completedInCycle % max(1, settings.longBreakEvery) == 0 ? .longBreak : .shortBreak
-        } else {
-            phase = .focus
+        if settings.writeToCalendar {
+            let categoryName = category?.name ?? "专注"
+            let title = "🍅 \(categoryName) · \(minutes) 分钟"
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.dateFormat = "HH:mm"
+            let notes = "分类：\(categoryName) · 第 \(history.todayCount) 个番茄 · 完成于 \(formatter.string(from: completedAt))"
+            calendar.writeFocus(
+                start: completedAt.addingTimeInterval(-duration),
+                end: completedAt,
+                title: title,
+                notes: notes,
+                calendarID: settings.calendarID
+            )
         }
 
         activeCategory = nil
         sessionStart = nil
-        plannedDuration = nil
+        plannedDuration = Pomodoro.focusSeconds
         playChime()
-
-        // 自动开始下一段。
-        if finished == .focus {
-            if settings.autoStartBreaks { startBreak() }
-        } else if settings.autoStartFocus {
-            startFocus(minutes: settings.lastFocusMinutes, category: preferredCategory)
-        }
     }
 
     // MARK: - 通知与声音
@@ -264,20 +209,17 @@ final class TimerEngine {
     private func scheduleNotification(after seconds: TimeInterval) {
         guard settings.notificationsEnabled else { return }
 
-        let title: String
-        let body: String
-        if phase == .focus {
-            title = "专注完成 🍅"
-            body = "\(sessionTitle)结束，休息一下。"
-        } else {
-            title = "休息结束 ☕️"
-            body = "准备好了就开始下一个番茄。"
-        }
-        NotificationScheduler.schedule(in: seconds, title: title, body: body, id: notificationID)
+        let minutes = max(1, Int((plannedDuration / 60).rounded()))
+        NotificationScheduler.schedule(
+            in: seconds,
+            title: "专注完成 🍅",
+            body: "\(sessionTitle) \(minutes) 分钟已完成，已记入统计。",
+            id: notificationID
+        )
     }
 
     private func playChime() {
-        guard settings.playSound else { return }
+        guard settings.notificationsEnabled else { return }
         NSSound(named: NSSound.Name("Glass"))?.play()
     }
 }

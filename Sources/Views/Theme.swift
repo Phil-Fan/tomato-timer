@@ -26,12 +26,6 @@ extension FocusCategory {
     var tint: Color { CategoryColors.color(for: colorIndex) }
 }
 
-extension Phase {
-    var tint: Color {
-        switch self {
-        case .focus: Color(red: 0.89, green: 0.24, blue: 0.20)
-        case .shortBreak: Color(red: 0.22, green: 0.63, blue: 0.43)
-        case .longBreak: Color(red: 0.18, green: 0.49, blue: 0.78)
-        }
-    }
+enum TomatoTheme {
+    static let focus = Color(red: 0.89, green: 0.24, blue: 0.20)
 }

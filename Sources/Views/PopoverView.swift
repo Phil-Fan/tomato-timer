@@ -3,20 +3,21 @@ import SwiftUI
 
 struct PopoverView: View {
     let model: AppModel
+    /// 在悬浮球面板里展开时传入，用于一键收成球。
+    var onCollapse: (() -> Void)?
 
     @Environment(\.openSettings) private var openSettings
 
     @State private var selectedCategoryID: UUID?
-    @State private var selectedMinutes = 25
 
     private var engine: TimerEngine { model.engine }
     private var settings: AppSettings { model.settings }
-    private var stats: StatsStore { model.stats }
+    private var history: SessionHistory { model.history }
     private var calendar: CalendarService { model.calendar }
     private var categories: CategoryStore { model.categories }
 
     private var showingStartCard: Bool {
-        engine.phase == .focus && !engine.hasStarted
+        !engine.hasStarted
     }
 
     private var tint: Color {
@@ -24,18 +25,7 @@ struct PopoverView: View {
         if showingStartCard, let selected = categories.category(id: selectedCategoryID) {
             return selected.tint
         }
-        return engine.phase.tint
-    }
-
-    private var durationOptions: [Int] {
-        var options = [15, 25, 45, 60]
-        if !options.contains(settings.focusMinutes) {
-            options.append(settings.focusMinutes)
-        }
-        if !options.contains(selectedMinutes) {
-            options.append(selectedMinutes)
-        }
-        return options.sorted()
+        return TomatoTheme.focus
     }
 
     var body: some View {
@@ -48,21 +38,24 @@ struct PopoverView: View {
                 controls
             }
 
+            Spacer(minLength: 0)
+
             Divider()
 
             footer
         }
         .padding(18)
-        .frame(width: 320)
+        .frame(maxWidth: .infinity)
+        .onExitCommand {
+            onCollapse?()
+        }
         .onAppear {
-            stats.refresh()
             calendar.refresh()
 
             if selectedCategoryID == nil {
                 selectedCategoryID = categories.category(rawID: settings.lastCategoryID)?.id
                     ?? categories.items.first?.id
             }
-            selectedMinutes = min(120, max(5, settings.lastFocusMinutes))
         }
     }
 
@@ -73,7 +66,7 @@ struct PopoverView: View {
             VStack(alignment: .leading, spacing: 2) {
                 Text("开始专注")
                     .font(.title3.weight(.semibold))
-                Text("今日已完成 \(stats.count) 个番茄")
+                Text("45 分钟 · 今日已完成 \(history.todayCount) 个")
                     .font(.callout)
                     .foregroundStyle(.secondary)
             }
@@ -91,21 +84,6 @@ struct PopoverView: View {
                 }
                 .labelsHidden()
                 .pickerStyle(.menu)
-            }
-
-            VStack(alignment: .leading, spacing: 6) {
-                Text("时长（分钟）")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                Picker("时长", selection: $selectedMinutes) {
-                    ForEach(durationOptions, id: \.self) { minutes in
-                        Text("\(minutes)")
-                            .tag(minutes)
-                    }
-                }
-                .labelsHidden()
-                .pickerStyle(.segmented)
             }
 
             Button {
@@ -127,8 +105,9 @@ struct PopoverView: View {
             return
         }
         settings.lastCategoryID = category.id.uuidString
-        settings.lastFocusMinutes = selectedMinutes
-        engine.startFocus(minutes: selectedMinutes, category: category)
+        engine.startFocus(category: category)
+        // 开始后立即收成悬浮球，让球上的进度环接管展示。
+        onCollapse?()
     }
 
     // MARK: - 计时
@@ -141,14 +120,9 @@ struct PopoverView: View {
 
             Spacer()
 
-            HStack(spacing: 4) {
-                ForEach(0..<max(1, min(8, settings.longBreakEvery)), id: \.self) { index in
-                    Circle()
-                        .fill(index < engine.cycleDots ? tint : Color.primary.opacity(0.12))
-                        .frame(width: 5, height: 5)
-                }
-            }
-            .help("本轮已完成 \(engine.cycleDots) / \(settings.longBreakEvery) 个番茄")
+            Text("45 分钟")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
         }
     }
 
@@ -184,12 +158,12 @@ struct PopoverView: View {
 
     private var subtitle: String {
         if engine.isRunning {
-            return engine.phase == .focus ? "专注中" : "休息中"
+            return "专注中"
         }
         if engine.hasStarted {
             return "已暂停"
         }
-        return engine.phase == .focus ? "准备开始" : "开始休息"
+        return "准备开始"
     }
 
     private var controls: some View {
@@ -214,14 +188,6 @@ struct PopoverView: View {
             .tint(tint)
             .keyboardShortcut(.space, modifiers: [])
             .help(engine.isRunning ? "暂停" : "开始")
-
-            Button {
-                engine.skip()
-            } label: {
-                Image(systemName: "forward.end")
-            }
-            .buttonStyle(.borderless)
-            .help("跳过，不计入统计")
         }
     }
 
@@ -229,13 +195,21 @@ struct PopoverView: View {
 
     private var footer: some View {
         HStack(spacing: 10) {
-            Text("今日 \(stats.count) 个 · \(stats.minutes) 分钟")
+            Text("今日 \(history.todayCount) 个 · \(history.todayMinutes) 分钟")
                 .font(.caption)
                 .foregroundStyle(.secondary)
                 .monospacedDigit()
                 .help("今日完成的番茄数与专注分钟数")
 
             Spacer()
+
+            if let onCollapse {
+                Button(action: onCollapse) {
+                    Image(systemName: "arrow.down.right.and.arrow.up.left")
+                }
+                .buttonStyle(.borderless)
+                .help("收起为悬浮球")
+            }
 
             if settings.writeToCalendar {
                 Image(systemName: calendar.isAuthorized ? "calendar.badge.checkmark" : "calendar.badge.exclamationmark")
@@ -263,7 +237,8 @@ struct PopoverView: View {
     }
 
     private func openSettingsWindow() {
-        NSApp.activate(ignoringOtherApps: true)
+        onCollapse?()
+        NSApp.activate()
         openSettings()
     }
 }
