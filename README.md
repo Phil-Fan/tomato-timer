@@ -60,6 +60,21 @@ tccutil reset Calendar com.philfan.tomato
 
 脚本会构建 Release、校验签名、生成 DMG（带 Applications 快捷方式）和 ZIP。App 图标由 `scripts/make-icon.swift` 生成。
 
+### 正式分发
+
+正式包通过 GitHub Actions 发布，使用 **Developer ID 签名 + notarytool 公证 + stapler 装订**：
+
+```bash
+git tag v1.1.0
+git push origin v1.1.0
+```
+
+`Release` workflow 会构建、签名、公证，并把 `番茄钟.dmg`、`番茄钟.zip`、`SHA256SUMS.txt`
+上传到 GitHub Release。首次使用需要在仓库 Secrets 里配置证书和公证凭据，
+完整步骤见 [docs/macos-signing.md](docs/macos-signing.md)。
+
+本地不带凭据运行 `./scripts/package.sh` 仍然是 ad-hoc 签名，只适合自己使用。
+
 ### 自己用或给朋友
 
 当前是 ad-hoc 签名（Sign to Run Locally），在本机可以直接打开。复制到别的 Mac 时 Gatekeeper 可能拦截，可以：
@@ -67,25 +82,6 @@ tccutil reset Calendar com.philfan.tomato
 - 右键 App → 打开，或
 - 系统设置 → 隐私与安全性 → 仍要打开，或
 - `xattr -dr com.apple.quarantine /Applications/番茄钟.app`
-
-### 正式分发
-
-需要 Apple Developer Program（Developer ID 证书）。在 `project.yml` 里设置：
-
-```yaml
-DEVELOPMENT_TEAM: YOUR_TEAM_ID
-CODE_SIGN_STYLE: Manual
-CODE_SIGN_IDENTITY: "Developer ID Application"
-ENABLE_HARDENED_RUNTIME: YES
-```
-
-然后用 `xcodebuild archive` 导出 developer-id 版本，并对 DMG 公证：
-
-```bash
-xcrun notarytool submit dist/番茄钟.dmg --keychain-profile "notary" --wait
-xcrun stapler staple dist/番茄钟.dmg
-spctl -a -vvv -t install dist/番茄钟.dmg
-```
 
 没有开发者账号时，ad-hoc 版本只适合自己使用，或让对方手动放行。
 

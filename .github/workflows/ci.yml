@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  workflow_call:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build & package (macOS)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: brew install xcodegen
+
+      # 只验证构建和打包流程本身；正式签名/公证在 release.yml 里做。
+      - name: Build, package and verify (ad-hoc)
+        run: ./scripts/package.sh
+
+      - name: Verify app bundle
+        run: |
+          set -euo pipefail
+          APP="dist/dmg-root/番茄钟.app"
+          test -d "$APP"
+          codesign --verify --deep --strict "$APP"
+          test -f "dist/番茄钟.dmg"
+          test -f "dist/番茄钟.zip"
+          cat dist/SHA256SUMS.txt

@@ -1,0 +1,187 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Signed & notarized release (macOS)
+    runs-on: macos-15
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Install XcodeGen
+        env:
+          HOMEBREW_NO_AUTO_UPDATE: 1
+        run: brew install xcodegen
+
+      # 发布包必须签名 + 公证；缺凭据直接失败，避免把 Gatekeeper 拦不住的包发出去。
+      - name: Validate signing secrets
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          missing=()
+          for VAR in APPLE_CERTIFICATE APPLE_CERTIFICATE_PASSWORD APPLE_SIGNING_IDENTITY; do
+            if [[ -z "${!VAR:-}" ]]; then
+              missing+=("$VAR")
+            fi
+          done
+
+          have_api=0
+          if [[ -n "${APPLE_API_KEY:-}" && -n "${APPLE_API_ISSUER:-}" && -n "${APPLE_API_KEY_P8:-}" ]]; then
+            have_api=1
+          fi
+          have_apple_id=0
+          if [[ -n "${APPLE_ID:-}" && -n "${APPLE_PASSWORD:-}" && -n "${APPLE_TEAM_ID:-}" ]]; then
+            have_apple_id=1
+          fi
+
+          if [[ "$have_api" -eq 0 && "$have_apple_id" -eq 0 ]]; then
+            missing+=("APPLE_API_KEY + APPLE_API_ISSUER + APPLE_API_KEY_P8 或 APPLE_ID + APPLE_PASSWORD + APPLE_TEAM_ID")
+          fi
+
+          if ((${#missing[@]} > 0)); then
+            echo "::error::Missing release secrets: ${missing[*]}. See docs/macos-signing.md"
+            exit 1
+          fi
+
+      - name: Import Developer ID certificate
+        env:
+          APPLE_CERTIFICATE: ${{ secrets.APPLE_CERTIFICATE }}
+          APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+        run: |
+          set -euo pipefail
+          KEYCHAIN="$RUNNER_TEMP/tomato-signing.keychain-db"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 24)"
+          echo "::add-mask::${KEYCHAIN_PASSWORD}"
+
+          CERT_PATH="$RUNNER_TEMP/developer-id.p12"
+          echo "$APPLE_CERTIFICATE" | base64 --decode > "$CERT_PATH"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          # 整个 job 期间保持解锁，签名和公证都会用到。
+          security set-keychain-settings -lut 21600 "$KEYCHAIN"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN"
+          security import "$CERT_PATH" -k "$KEYCHAIN" \
+            -P "$APPLE_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/security -f pkcs12 -A
+          # 少了这一步 codesign 会弹窗要钥匙串权限，在 CI 上直接失败。
+          security set-key-partition-list -S apple-tool:,apple:,codesign: \
+            -s -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN" >/dev/null
+          security list-keychains -d user -s "$KEYCHAIN" $(security list-keychains -d user | tr -d '"')
+          rm -f "$CERT_PATH"
+
+          security find-identity -v -p codesigning "$KEYCHAIN"
+          if ! security find-identity -v -p codesigning "$KEYCHAIN" | grep -Fq "$APPLE_SIGNING_IDENTITY"; then
+            echo "::error::APPLE_SIGNING_IDENTITY not found in the imported certificate: $APPLE_SIGNING_IDENTITY"
+            exit 1
+          fi
+
+          echo "SIGNING_KEYCHAIN=${KEYCHAIN}" >> "$GITHUB_ENV"
+
+      - name: Write App Store Connect API key
+        env:
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+        run: |
+          set -euo pipefail
+          if [[ -z "${APPLE_API_KEY_P8:-}" ]]; then
+            echo "No APPLE_API_KEY_P8; notarization will fall back to APPLE_ID credentials."
+            exit 0
+          fi
+          KEY_DIR="$RUNNER_TEMP/private_keys"
+          mkdir -p "$KEY_DIR"
+          KEY_PATH="${KEY_DIR}/AuthKey_${APPLE_API_KEY}.p8"
+          if [[ "$APPLE_API_KEY_P8" == -----BEGIN* ]]; then
+            printf '%s\n' "$APPLE_API_KEY_P8" > "$KEY_PATH"
+          else
+            # 也接受 base64 编码的 PEM，避免多行 secret 在复制时被截断。
+            echo "$APPLE_API_KEY_P8" | base64 --decode > "$KEY_PATH"
+          fi
+          chmod 600 "$KEY_PATH"
+          echo "APPLE_API_KEY_PATH=${KEY_PATH}" >> "$GITHUB_ENV"
+
+      - name: Derive team ID
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [[ -n "${APPLE_TEAM_ID:-}" ]]; then
+            echo "APPLE_TEAM_ID=${APPLE_TEAM_ID}" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          # "Developer ID Application: Name (TEAMID)" → TEAMID
+          if [[ "$APPLE_SIGNING_IDENTITY" =~ \(([A-Z0-9]{10})\)$ ]]; then
+            echo "APPLE_TEAM_ID=${BASH_REMATCH[1]}" >> "$GITHUB_ENV"
+          fi
+
+      - name: Build, sign and notarize
+        env:
+          APPLE_SIGNING_IDENTITY: ${{ secrets.APPLE_SIGNING_IDENTITY }}
+          APPLE_API_KEY: ${{ secrets.APPLE_API_KEY }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_PASSWORD: ${{ secrets.APPLE_PASSWORD }}
+        run: |
+          set -euo pipefail
+          export VERSION="${GITHUB_REF_NAME#v}"
+          export BUILD_NUMBER="${GITHUB_RUN_NUMBER}"
+          echo "Releasing ${VERSION} (build ${BUILD_NUMBER})"
+          ./scripts/package.sh
+
+      - name: Verify signature and notarization
+        run: |
+          set -euo pipefail
+          APP="dist/dmg-root/番茄钟.app"
+          DMG="dist/番茄钟.dmg"
+
+          echo "== codesign =="
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          codesign --display --verbose=4 "$APP" 2>&1 | sed -n '1,20p'
+
+          echo "== stapler (app) =="
+          xcrun stapler validate "$APP"
+
+          echo "== Gatekeeper (app) =="
+          spctl --assess --type execute --verbose=4 "$APP"
+
+          echo "== stapler (dmg) =="
+          xcrun stapler validate "$DMG"
+
+          cat dist/SHA256SUMS.txt
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: 番茄钟 ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          prerelease: ${{ contains(github.ref_name, '-') }}
+          generate_release_notes: true
+          fail_on_unmatched_files: true
+          files: |
+            dist/番茄钟.dmg
+            dist/番茄钟.zip
+            dist/SHA256SUMS.txt
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -7,6 +7,12 @@ APP_NAME="番茄钟"
 BUNDLE_NAME="TomatoTimer.app"
 DIST="dist"
 
+# 本机直接运行时不设这些变量：走 ad-hoc 签名，和以前一样只适合自己用。
+# CI 会把它们注入进来做 Developer ID 签名 + 公证。
+SIGN_IDENTITY="${APPLE_SIGNING_IDENTITY:-}"
+VERSION="${VERSION:-}"
+BUILD_NUMBER="${BUILD_NUMBER:-}"
+
 if [ ! -f Support/AppIcon.icns ]; then
   echo "生成 App 图标…"
   mkdir -p .build/icon .build/AppIcon.iconset
@@ -21,22 +27,97 @@ if [ ! -f Support/AppIcon.icns ]; then
   iconutil -c icns .build/AppIcon.iconset -o Support/AppIcon.icns
 fi
 
-echo "构建 Release…"
+echo "生成 Xcode 工程…"
 xcodegen generate
-xcodebuild \
-  -project TomatoTimer.xcodeproj \
-  -scheme TomatoTimer \
-  -configuration Release \
-  -derivedDataPath .build \
-  build
+
+# Info.plist 由 xcodegen 按 project.yml 重写，版本号要在生成之后再覆盖。
+if [ -n "$VERSION" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleShortVersionString $VERSION" Support/Info.plist
+fi
+if [ -n "$BUILD_NUMBER" ]; then
+  /usr/libexec/PlistBuddy -c "Set :CFBundleVersion $BUILD_NUMBER" Support/Info.plist
+fi
+
+BUILD_ARGS=(
+  -project TomatoTimer.xcodeproj
+  -scheme TomatoTimer
+  -configuration Release
+  -derivedDataPath .build
+)
+
+# 交给外部签名时先产出未签名包，最后统一 codesign，避免 Xcode 用错身份。
+if [ -n "$SIGN_IDENTITY" ]; then
+  BUILD_ARGS+=(CODE_SIGNING_ALLOWED=NO)
+fi
+
+echo "构建 Release…"
+xcodebuild "${BUILD_ARGS[@]}" build
 
 APP_PATH=".build/Build/Products/Release/$BUNDLE_NAME"
+
+if [ -n "$SIGN_IDENTITY" ]; then
+  echo "使用 Developer ID 签名：$SIGN_IDENTITY"
+  # Hardened Runtime + 安全时间戳是公证的硬性要求。
+  codesign --force --options runtime --timestamp \
+    --sign "$SIGN_IDENTITY" "$APP_PATH"
+fi
 
 echo "校验签名…"
 codesign --verify --deep --strict "$APP_PATH"
 
+# 公证凭据：CI 用 App Store Connect API Key；本地可以用 notarytool 的 keychain profile。
+NOTARY_PROFILE="${NOTARY_PROFILE:-}"
+API_KEY_PATH="${APPLE_API_KEY_PATH:-}"
+HAS_NOTARY_CREDS=0
+if [ -n "$NOTARY_PROFILE" ] || [ -n "$API_KEY_PATH" ]; then
+  HAS_NOTARY_CREDS=1
+elif [ -n "${APPLE_ID:-}" ] && [ -n "${APPLE_PASSWORD:-}" ] && [ -n "${APPLE_TEAM_ID:-}" ]; then
+  HAS_NOTARY_CREDS=1
+fi
+
+if [ "$HAS_NOTARY_CREDS" = "1" ] && [ -z "$SIGN_IDENTITY" ]; then
+  echo "错误：配置了公证凭据，但没有 APPLE_SIGNING_IDENTITY。" >&2
+  echo "     未签名的包无法公证，请设置 Developer ID 证书后再试。" >&2
+  exit 1
+fi
+
+notarize() {
+  local file="$1"
+
+  if [ -n "$NOTARY_PROFILE" ]; then
+    xcrun notarytool submit "$file" --keychain-profile "$NOTARY_PROFILE" --wait
+  elif [ -n "$API_KEY_PATH" ]; then
+    xcrun notarytool submit "$file" \
+      --key "$API_KEY_PATH" \
+      --key-id "${APPLE_API_KEY:?APPLE_API_KEY missing}" \
+      --issuer "${APPLE_API_ISSUER:?APPLE_API_ISSUER missing}" \
+      --wait
+  else
+    xcrun notarytool submit "$file" \
+      --apple-id "${APPLE_ID:?}" \
+      --password "${APPLE_PASSWORD:?}" \
+      --team-id "${APPLE_TEAM_ID:?}" \
+      --wait
+  fi
+}
+
 rm -rf "$DIST"
+mkdir -p "$DIST"
+
+if [ "$HAS_NOTARY_CREDS" = "1" ]; then
+  echo "公证 App…"
+  # notarytool 只接受 zip/dmg/pkg 等容器，先打包 App 再提交。
+  ditto -c -k --keepParent "$APP_PATH" "$DIST/notarize.zip"
+  notarize "$DIST/notarize.zip"
+  xcrun stapler staple "$APP_PATH"
+  xcrun stapler validate "$APP_PATH"
+  rm -f "$DIST/notarize.zip"
+else
+  echo "未配置公证凭据，跳过 notarize（ad-hoc 包只适合本机使用）。"
+fi
+
 mkdir -p "$DIST/dmg-root"
+# 公证后 ticket 已经写进 bundle，必须在 staple 之后再复制进 DMG。
 cp -R "$APP_PATH" "$DIST/dmg-root/$APP_NAME.app"
 ln -s /Applications "$DIST/dmg-root/Applications"
 
@@ -47,10 +128,28 @@ hdiutil create \
   -ov -format UDZO \
   "$DIST/$APP_NAME.dmg" >/dev/null
 
+if [ -n "$SIGN_IDENTITY" ]; then
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DIST/$APP_NAME.dmg"
+fi
+
+if [ "$HAS_NOTARY_CREDS" = "1" ]; then
+  echo "公证 DMG…"
+  notarize "$DIST/$APP_NAME.dmg"
+  xcrun stapler staple "$DIST/$APP_NAME.dmg"
+  xcrun stapler validate "$DIST/$APP_NAME.dmg"
+fi
+
 echo "生成 ZIP…"
 ditto -c -k --keepParent "$DIST/dmg-root/$APP_NAME.app" "$DIST/$APP_NAME.zip"
+
+echo "生成 SHA256…"
+(
+  cd "$DIST"
+  shasum -a 256 "$APP_NAME.dmg" "$APP_NAME.zip" > SHA256SUMS.txt
+)
 
 echo
 echo "完成："
 echo "  $DIST/$APP_NAME.dmg"
 echo "  $DIST/$APP_NAME.zip"
+echo "  $DIST/SHA256SUMS.txt"
