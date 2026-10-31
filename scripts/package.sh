@@ -5,6 +5,8 @@ cd "$(dirname "$0")/.."
 
 APP_NAME="番茄钟"
 BUNDLE_NAME="TomatoTimer.app"
+# GitHub Release 的资产名必须是 ASCII，否则会被上传成 default.dmg / default.zip。
+ARTIFACT_NAME="TomatoTimer"
 DIST="dist"
 
 # 本机直接运行时不设这些变量：走 ad-hoc 签名，和以前一样只适合自己用。
@@ -126,30 +128,30 @@ hdiutil create \
   -volname "$APP_NAME" \
   -srcfolder "$DIST/dmg-root" \
   -ov -format UDZO \
-  "$DIST/$APP_NAME.dmg" >/dev/null
+  "$DIST/$ARTIFACT_NAME.dmg" >/dev/null
 
 if [ -n "$SIGN_IDENTITY" ]; then
-  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DIST/$APP_NAME.dmg"
+  codesign --force --timestamp --sign "$SIGN_IDENTITY" "$DIST/$ARTIFACT_NAME.dmg"
 fi
 
 if [ "$HAS_NOTARY_CREDS" = "1" ]; then
   echo "公证 DMG…"
-  notarize "$DIST/$APP_NAME.dmg"
-  xcrun stapler staple "$DIST/$APP_NAME.dmg"
-  xcrun stapler validate "$DIST/$APP_NAME.dmg"
+  notarize "$DIST/$ARTIFACT_NAME.dmg"
+  xcrun stapler staple "$DIST/$ARTIFACT_NAME.dmg"
+  xcrun stapler validate "$DIST/$ARTIFACT_NAME.dmg"
 fi
 
 echo "生成 ZIP…"
-ditto -c -k --keepParent "$DIST/dmg-root/$APP_NAME.app" "$DIST/$APP_NAME.zip"
+ditto -c -k --keepParent "$DIST/dmg-root/$APP_NAME.app" "$DIST/$ARTIFACT_NAME.zip"
 
 echo "生成 SHA256…"
 (
   cd "$DIST"
-  shasum -a 256 "$APP_NAME.dmg" "$APP_NAME.zip" > SHA256SUMS.txt
+  shasum -a 256 "$ARTIFACT_NAME.dmg" "$ARTIFACT_NAME.zip" > SHA256SUMS.txt
 )
 
 echo
 echo "完成："
-echo "  $DIST/$APP_NAME.dmg"
-echo "  $DIST/$APP_NAME.zip"
+echo "  $DIST/$ARTIFACT_NAME.dmg"
+echo "  $DIST/$ARTIFACT_NAME.zip"
 echo "  $DIST/SHA256SUMS.txt"

@@ -154,7 +154,7 @@ jobs:
         run: |
           set -euo pipefail
           APP="dist/dmg-root/番茄钟.app"
-          DMG="dist/番茄钟.dmg"
+          DMG="dist/TomatoTimer.dmg"
 
           echo "== codesign =="
           codesign --verify --deep --strict --verbose=2 "$APP"
@@ -180,8 +180,8 @@ jobs:
           generate_release_notes: true
           fail_on_unmatched_files: true
           files: |
-            dist/番茄钟.dmg
-            dist/番茄钟.zip
+            dist/TomatoTimer.dmg
+            dist/TomatoTimer.zip
             dist/SHA256SUMS.txt
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

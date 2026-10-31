@@ -1,6 +1,6 @@
 # macOS 签名与公证（Developer ID + notarytool）
 
-> 目标：从 GitHub Release 下载的 `番茄钟.dmg` / `番茄钟.zip` 在别人的 Mac 上打开时，
+> 目标：从 GitHub Release 下载的 `TomatoTimer.dmg` / `TomatoTimer.zip` 在别人的 Mac 上打开时，
 > 不再出现「已损坏 / 无法验证开发者」。
 >
 > 路径：**Developer ID Application 签名 → notarytool 公证 → stapler 装订**。
@@ -167,8 +167,8 @@ codesign --verify --deep --strict --verbose=2 "$APP"
 xcrun stapler validate "$APP"
 spctl --assess --type execute --verbose=4 "$APP"
 
-xcrun stapler validate "dist/番茄钟.dmg"
-spctl --assess --type open --context context:primary-signature --verbose=4 "dist/番茄钟.dmg"
+xcrun stapler validate "dist/TomatoTimer.dmg"
+spctl --assess --type open --context context:primary-signature --verbose=4 "dist/TomatoTimer.dmg"
 ```
 
 ## 常见问题

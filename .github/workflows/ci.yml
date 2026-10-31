@@ -36,6 +36,6 @@ jobs:
           APP="dist/dmg-root/番茄钟.app"
           test -d "$APP"
           codesign --verify --deep --strict "$APP"
-          test -f "dist/番茄钟.dmg"
-          test -f "dist/番茄钟.zip"
+          test -f "dist/TomatoTimer.dmg"
+          test -f "dist/TomatoTimer.zip"
           cat dist/SHA256SUMS.txt

@@ -57,8 +57,8 @@ tccutil reset Calendar com.philfan.tomato
 
 输出到 `dist/`：
 
-- `番茄钟.dmg`：打开后把 App 拖进 Applications。
-- `番茄钟.zip`：直接解压使用。
+- `TomatoTimer.dmg`：打开后把 App 拖进 Applications。
+- `TomatoTimer.zip`：直接解压使用。
 
 脚本会构建 Release、校验签名、生成 DMG（带 Applications 快捷方式）和 ZIP。App 图标由 `scripts/make-icon.swift` 生成。
 
@@ -71,7 +71,7 @@ git tag v1.1.0
 git push origin v1.1.0
 ```
 
-`Release` workflow 会构建、签名、公证，并把 `番茄钟.dmg`、`番茄钟.zip`、`SHA256SUMS.txt`
+`Release` workflow 会构建、签名、公证，并把 `TomatoTimer.dmg`、`TomatoTimer.zip`、`SHA256SUMS.txt`
 上传到 GitHub Release。首次使用需要在仓库 Secrets 里配置证书和公证凭据，
 完整步骤见 [docs/macos-signing.md](docs/macos-signing.md)。
 
@@ -117,9 +117,9 @@ App 会读取 `https://api.github.com/repos/Phil-Fan/tomato-timer/releases/lates
 
 发布新版本时按现有流程打 tag 即可，版本号取自 tag（`v1.2.0` → App 内 `1.2.0`）。Release 需要包含：
 
-- `番茄钟.zip`（自动更新下载这个）
+- `TomatoTimer.zip`（自动更新下载这个）
 - `SHA256SUMS.txt`（校验用；没有这个文件会跳过校验）
-- `番茄钟.dmg`（手动下载用）
+- `TomatoTimer.dmg`（手动下载用）
 
 `scripts/package.sh` 和 `.github/workflows/release.yml` 已经会生成并上传这些文件。
 
