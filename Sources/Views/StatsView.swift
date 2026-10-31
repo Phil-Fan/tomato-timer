@@ -1,10 +1,15 @@
+import AppKit
 import Charts
+import Combine
 import SwiftUI
 
 struct StatsView: View {
     var settings: AppSettings
     var history: SessionHistory
     var categories: CategoryStore
+    var calendar: CalendarService
+
+    @State private var calendarEntries: [CalendarFocusEntry] = []
 
     private var accent: Color {
         TomatoTheme.focus
@@ -22,6 +27,16 @@ struct StatsView: View {
                 categoryCard
             }
             .padding(16)
+        }
+        .onAppear(perform: reloadCalendarEntries)
+        .onChange(of: categories.items) { _, _ in
+            reloadCalendarEntries()
+        }
+        .onChange(of: calendar.status) { _, _ in
+            reloadCalendarEntries()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: NSApplication.didBecomeActiveNotification)) { _ in
+            reloadCalendarEntries()
         }
     }
 
@@ -66,6 +81,13 @@ struct StatsView: View {
                 Text("目标 \(target) 分钟")
                     .font(.callout)
                     .foregroundStyle(.secondary)
+
+                if calendarTodayMinutes > 0 {
+                    Text("含日历 \(calendarTodayMinutes) 分钟")
+                        .font(.caption2)
+                        .foregroundStyle(.tertiary)
+                        .monospacedDigit()
+                }
 
                 HStack(spacing: 8) {
                     Text("完成 \(completionPercent)%")
@@ -286,14 +308,43 @@ struct StatsView: View {
     // MARK: - 数据
 
     private var todayStats: [CategoryStat] {
-        stats(for: history.todayRecords)
+        stats(for: records(on: Date()))
+    }
+
+    /// App 记录 + 日历补充，7 天趋势和今日统计共用。
+    private var combinedRecords: [SessionRecord] {
+        history.records + calendarSessionRecords
+    }
+
+    private var calendarSessionRecords: [SessionRecord] {
+        calendarEntries.map { entry in
+            SessionRecord(
+                completedAt: entry.startDate,
+                minutes: entry.minutes,
+                categoryID: entry.categoryID,
+                categoryName: entry.categoryName
+            )
+        }
+    }
+
+    private var calendarTodayMinutes: Int {
+        calendarEntries.reduce(0) { partial, entry in
+            Calendar.current.isDate(entry.startDate, inSameDayAs: Date())
+                ? partial + entry.minutes
+                : partial
+        }
+    }
+
+    private func records(on date: Date) -> [SessionRecord] {
+        guard let interval = Calendar.current.dateInterval(of: .day, for: date) else { return [] }
+        return combinedRecords.filter { interval.contains($0.completedAt) }
     }
 
     private var weekRecords: [SessionRecord] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         guard let start = calendar.date(byAdding: .day, value: -6, to: today) else { return [] }
-        return history.records.filter { $0.completedAt >= start }
+        return combinedRecords.filter { $0.completedAt >= start }
     }
 
     private var weekMinutes: Int {
@@ -308,10 +359,26 @@ struct StatsView: View {
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else {
                 return nil
             }
-            let minutes = history.records(on: day).reduce(0) { $0 + $1.minutes }
+            let minutes = records(on: day).reduce(0) { $0 + $1.minutes }
             let label = offset == 0 ? "今天" : Self.weekdayFormatter.string(from: day)
             return DayStat(id: day, label: label, minutes: minutes, isToday: offset == 0)
         }
+    }
+
+    private func reloadCalendarEntries() {
+        calendar.refresh()
+
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        guard let start = calendar.date(byAdding: .day, value: -6, to: today) else {
+            calendarEntries = []
+            return
+        }
+        calendarEntries = self.calendar.focusEntries(
+            from: start,
+            to: Date(),
+            categories: categories.items
+        )
     }
 
     private func stats(for records: [SessionRecord]) -> [CategoryStat] {

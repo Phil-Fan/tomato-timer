@@ -44,5 +44,5 @@ targets:
         LSMinimumSystemVersion: "14.0"
         LSApplicationCategoryType: public.app-category.productivity
         NSHumanReadableCopyright: ""
-        NSCalendarsFullAccessUsageDescription: 番茄钟需要访问日历，以便把你完成的专注时段写入你选择的日历。
-        NSCalendarsUsageDescription: 番茄钟需要访问日历，以便记录已完成的专注时段。
+        NSCalendarsFullAccessUsageDescription: 番茄钟需要访问日历，以便把你完成的专注时段写入你选择的日历，并把标题以分类名开头的日程计入统计。
+        NSCalendarsUsageDescription: 番茄钟需要访问日历，以便记录已完成的专注时段，并把标题以分类名开头的日程计入统计。

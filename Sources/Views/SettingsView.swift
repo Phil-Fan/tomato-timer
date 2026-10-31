@@ -7,28 +7,37 @@ struct SettingsView: View {
     let model: AppModel
 
     var body: some View {
-        TabView {
-            StatsView(
-                settings: model.settings,
-                history: model.history,
-                categories: model.categories
-            )
-            .tabItem { Label("统计", systemImage: "chart.pie") }
+        VStack(spacing: 0) {
+            if model.updates.pendingRelease != nil {
+                UpdateBanner(updates: model.updates)
+                Divider()
+            }
 
-            CategorySettingsView(
-                settings: model.settings,
-                categories: model.categories
-            )
-            .tabItem { Label("分类", systemImage: "square.grid.2x2") }
+            TabView {
+                StatsView(
+                    settings: model.settings,
+                    history: model.history,
+                    categories: model.categories,
+                    calendar: model.calendar
+                )
+                .tabItem { Label("统计", systemImage: "chart.pie") }
 
-            CalendarSettingsView(settings: model.settings, calendar: model.calendar)
-                .tabItem { Label("日历", systemImage: "calendar") }
+                CategorySettingsView(
+                    settings: model.settings,
+                    categories: model.categories
+                )
+                .tabItem { Label("分类", systemImage: "square.grid.2x2") }
 
-            GeneralSettingsView(
-                settings: model.settings,
-                history: model.history
-            )
-            .tabItem { Label("通用", systemImage: "gearshape") }
+                CalendarSettingsView(settings: model.settings, calendar: model.calendar)
+                    .tabItem { Label("日历", systemImage: "calendar") }
+
+                GeneralSettingsView(
+                    settings: model.settings,
+                    history: model.history,
+                    updates: model.updates
+                )
+                .tabItem { Label("通用", systemImage: "gearshape") }
+            }
         }
         .frame(width: 640, height: 560)
         .onAppear {
@@ -38,11 +47,61 @@ struct SettingsView: View {
     }
 }
 
+/// 设置窗口顶部的更新提示，任何标签页都能看到。
+private struct UpdateBanner: View {
+    let updates: UpdateService
+
+    var body: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "arrow.down.circle.fill")
+                .font(.system(size: 16))
+                .foregroundStyle(.blue)
+
+            if let release = updates.pendingRelease {
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("新版本 \(release.tagName) 可用")
+                        .font(.callout.weight(.medium))
+                    Text("下载并安装后 App 会自动重启")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Spacer()
+
+            switch updates.state {
+            case .available:
+                Button("下载并安装") {
+                    Task { await updates.downloadAndInstall() }
+                }
+            case .downloading:
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在下载…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            case .ready, .installing:
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在安装…")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            default:
+                EmptyView()
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+        .background(Color.blue.opacity(0.08))
+    }
+}
+
 // MARK: - 通用
 
 private struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     var history: SessionHistory
+    var updates: UpdateService
 
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
     @State private var isTestingWebhook = false
@@ -118,6 +177,8 @@ private struct GeneralSettingsView: View {
             } header: {
                 Text("飞书")
             }
+
+            UpdateSettingsSection(settings: settings, updates: updates)
         }
         .formStyle(.grouped)
         .task {
@@ -181,6 +242,108 @@ private struct GeneralSettingsView: View {
             }
         } else if let url = URL(string: "x-apple.systempreferences:com.apple.preference.notifications") {
             NSWorkspace.shared.open(url)
+        }
+    }
+}
+
+// MARK: - 更新
+
+private struct UpdateSettingsSection: View {
+    @Bindable var settings: AppSettings
+    var updates: UpdateService
+
+    var body: some View {
+        Section {
+            HStack {
+                Text("当前版本")
+                Spacer()
+                Text(updates.currentVersion)
+                    .monospacedDigit()
+                    .foregroundStyle(.secondary)
+            }
+
+            Toggle("自动检查更新", isOn: $settings.autoCheckUpdates)
+                .onChange(of: settings.autoCheckUpdates) { _, enabled in
+                    guard enabled else { return }
+                    Task { await updates.checkForUpdates(interactive: false) }
+                }
+
+            HStack(spacing: 10) {
+                status
+                Spacer()
+                action
+            }
+
+            if let release = updates.pendingRelease {
+                HStack {
+                    Link("查看 \(release.tagName) 发布说明", destination: release.pageURL)
+                    Spacer()
+                    Button("跳过此版本") {
+                        updates.skipPendingUpdate()
+                    }
+                }
+            }
+        } header: {
+            Text("更新")
+        } footer: {
+            Text("新版本发布在 GitHub Releases。检查是自动的，下载并安装后会重启 App，进行中的专注会中断。")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    @ViewBuilder
+    private var status: some View {
+        switch updates.state {
+        case .idle:
+            Text("尚未检查")
+                .foregroundStyle(.secondary)
+        case .checking:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在检查…")
+                    .foregroundStyle(.secondary)
+            }
+        case .upToDate:
+            Label("已是最新版本", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(.green)
+        case .available(let release):
+            Label("发现新版本 \(release.tagName)", systemImage: "arrow.down.circle.fill")
+                .foregroundStyle(.blue)
+        case .downloading:
+            HStack(spacing: 6) {
+                ProgressView()
+                    .controlSize(.small)
+                Text("正在下载更新…")
+                    .foregroundStyle(.secondary)
+            }
+        case .ready:
+            Text("正在准备安装…")
+                .foregroundStyle(.secondary)
+        case .installing:
+            Text("正在安装，App 即将重启…")
+                .foregroundStyle(.secondary)
+        case .failed(let message):
+            Text(message)
+                .foregroundStyle(.red)
+                .lineLimit(2)
+        }
+    }
+
+    @ViewBuilder
+    private var action: some View {
+        switch updates.state {
+        case .checking, .downloading, .ready, .installing:
+            EmptyView()
+        case .available:
+            Button("下载并安装") {
+                Task { await updates.downloadAndInstall() }
+            }
+        case .idle, .upToDate, .failed:
+            Button("检查更新") {
+                Task { await updates.checkForUpdates() }
+            }
         }
     }
 }

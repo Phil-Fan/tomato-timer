@@ -17,9 +17,11 @@
   - 今日活动环：Apple Watch 风格的多级圆环，每个分类一圈、各自颜色，达到该分类的每日目标就闭合；中心显示总完成度
   - 最近 7 天趋势柱
   - 今天的分类进度：已专注 / 目标分钟、完成百分比、闭合标记
+  - 获得日历权限后，会自动把日历里标题以分类名开头的日程（如「工作：周会」）按日程时长计入对应分类的统计；App 自己写入的专注记录不会重复计算
 - 分类可增删改名、换 SF Symbol 图标，最多 8 个。
 - 完成后可发送飞书群卡片：设置 → 通用 → 飞书，粘贴自定义机器人 Webhook；支持签名校验和测试发送。
 - 提醒默认开启，结束发系统通知并播放提示音。
+- 自动检查 GitHub Releases 上的新版本：启动后检查一次、之后每 6 小时检查；有更新时菜单栏出现小箭头，设置 → 通用 → 更新里可一键下载安装（安装会重启 App）。
 
 ## 运行
 
@@ -102,6 +104,28 @@ git push origin v1.1.0
 
 Webhook 地址等同于发消息权限，不要公开分享。
 
+## 自动更新
+
+App 会读取 `https://api.github.com/repos/Phil-Fan/tomato-timer/releases/latest`，和当前
+`CFBundleShortVersionString` 比较。有更新时：
+
+1. 菜单栏图标旁出现向下箭头，设置窗口顶部也会出现提示。
+2. 设置 → 通用 → 更新 → 下载并安装：下载 Release 里的 zip、核对 `SHA256SUMS.txt`、校验签名。
+3. App 退出后由临时脚本替换 `/Applications` 里的旧版本并重新打开，进行中的专注会中断。
+
+自动检查默认开启，可以随时关掉；也可以用「跳过此版本」忽略某次更新。
+
+发布新版本时按现有流程打 tag 即可，版本号取自 tag（`v1.2.0` → App 内 `1.2.0`）。Release 需要包含：
+
+- `番茄钟.zip`（自动更新下载这个）
+- `SHA256SUMS.txt`（校验用；没有这个文件会跳过校验）
+- `番茄钟.dmg`（手动下载用）
+
+`scripts/package.sh` 和 `.github/workflows/release.yml` 已经会生成并上传这些文件。
+
+> 自动安装要求 App 位于可写入的位置（通常是 `/Applications`），且不能是 Xcode/Debug 构建。
+> 从 DMG 直接运行时 App 是只读的，会提示先拖进「应用程序」。
+
 ## 数据
 
 设置、分类、完成记录保存在 `UserDefaults`（bundle id `com.philfan.tomato`）。完成记录保留 400 天。
@@ -127,6 +151,7 @@ Sources/
   SessionHistory.swift     完成记录 + 今日统计
   CalendarService.swift    EventKit 读写
   NotificationScheduler.swift
+  UpdateService.swift      GitHub Releases 检查、下载与安装
   FloatingBall.swift       桌面悬浮球
   Views/
     PopoverView.swift      开始卡片 + 计时界面

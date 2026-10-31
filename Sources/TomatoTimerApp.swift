@@ -18,6 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if model.settings.notificationsEnabled {
             Task { _ = await NotificationScheduler.requestAuthorization() }
         }
+
+        model.updates.startAutomaticChecks()
     }
 
     func applicationDidResignActive(_ notification: Notification) {
@@ -44,6 +46,13 @@ struct TomatoTimerApp: App {
                 if !appDelegate.model.engine.menuBarText.isEmpty {
                     Text(appDelegate.model.engine.menuBarText)
                         .monospacedDigit()
+                }
+
+                if appDelegate.model.updates.pendingRelease != nil {
+                    Image(systemName: "arrow.down.circle.fill")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.blue)
+                        .help("有新版本可以更新")
                 }
             }
         }

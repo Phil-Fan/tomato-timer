@@ -9,6 +9,7 @@ final class AppModel {
     let calendar: CalendarService
     let categories: CategoryStore
     let engine: TimerEngine
+    let updates: UpdateService
 
     init() {
         let settings = AppSettings()
@@ -20,6 +21,7 @@ final class AppModel {
         self.history = history
         self.calendar = calendar
         self.categories = categories
+        self.updates = UpdateService(settings: settings)
         self.engine = TimerEngine(
             settings: settings,
             history: history,

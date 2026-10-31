@@ -29,9 +29,9 @@
 	<key>LSUIElement</key>
 	<true/>
 	<key>NSCalendarsFullAccessUsageDescription</key>
-	<string>番茄钟需要访问日历，以便把你完成的专注时段写入你选择的日历。</string>
+	<string>番茄钟需要访问日历，以便把你完成的专注时段写入你选择的日历，并把标题以分类名开头的日程计入统计。</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>番茄钟需要访问日历，以便记录已完成的专注时段。</string>
+	<string>番茄钟需要访问日历，以便记录已完成的专注时段，并把标题以分类名开头的日程计入统计。</string>
 	<key>NSHumanReadableCopyright</key>
 	<string></string>
 </dict>

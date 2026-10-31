@@ -15,6 +15,7 @@
 		49B50CDFAC2AD019D2938367 /* FeishuWebhook.swift in Sources */ = {isa = PBXBuildFile; fileRef = D4DDA70AAB409081B0353B0A /* FeishuWebhook.swift */; };
 		4D6B6DC735E6FAA780D7B15A /* AppSettings.swift in Sources */ = {isa = PBXBuildFile; fileRef = 409ECA0637674761198C20E1 /* AppSettings.swift */; };
 		5165B9A12CB4AD6D42040AD2 /* NotificationScheduler.swift in Sources */ = {isa = PBXBuildFile; fileRef = FB5601CC57DD2693C9DD8FCA /* NotificationScheduler.swift */; };
+		6D3594C89ECB1F35AE345875 /* UpdateService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 90674AAE0DFAD6E67B879DC6 /* UpdateService.swift */; };
 		851AB7743DE4432993CA37BD /* CategoryStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 76AE39B5A74681E51C9104B0 /* CategoryStore.swift */; };
 		940992D3A3D0EAA019EBA970 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1541B2F220CADEA785EAB4E2 /* AppModel.swift */; };
 		A14DBA312D57BD221FA20365 /* FloatingBall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430A4FA2533E322DD6778AAC /* FloatingBall.swift */; };
@@ -37,6 +38,7 @@
 		76AE39B5A74681E51C9104B0 /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
 		7958E6E9E0851BFD6D99B66B /* ActivityRingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityRingsView.swift; sourceTree = "<group>"; };
 		798F276B4374A9DCF0E3AEE4 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
+		90674AAE0DFAD6E67B879DC6 /* UpdateService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UpdateService.swift; sourceTree = "<group>"; };
 		A5861DB3DD8724BCB85E1991 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C910FB0BDD9A7F2FB75BD216 /* TomatoTimerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomatoTimerApp.swift; sourceTree = "<group>"; };
 		D228FAB53E5569571505FA5B /* TimerEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TimerEngine.swift; sourceTree = "<group>"; };
@@ -100,6 +102,7 @@
 				5C9F507517E72961D2D151D2 /* SessionHistory.swift */,
 				D228FAB53E5569571505FA5B /* TimerEngine.swift */,
 				C910FB0BDD9A7F2FB75BD216 /* TomatoTimerApp.swift */,
+				90674AAE0DFAD6E67B879DC6 /* UpdateService.swift */,
 			);
 			path = Sources;
 			sourceTree = "<group>";
@@ -191,6 +194,7 @@
 				0B32A429A07AD9125E716715 /* Theme.swift in Sources */,
 				2B8CF3451CD498BE8BDE1B73 /* TimerEngine.swift in Sources */,
 				F549430C534F6DCA62F7E90C /* TomatoTimerApp.swift in Sources */,
+				6D3594C89ECB1F35AE345875 /* UpdateService.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

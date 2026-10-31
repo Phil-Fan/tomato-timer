@@ -15,6 +15,9 @@ final class AppSettings {
         static let feishuEnabled = "feishuWebhookEnabled"
         static let feishuURL = "feishuWebhookURL"
         static let feishuSecret = "feishuWebhookSecret"
+        static let autoCheckUpdates = "autoCheckUpdates"
+        static let skippedUpdateVersion = "skippedUpdateVersion"
+        static let lastNotifiedUpdateVersion = "lastNotifiedUpdateVersion"
     }
 
     private let defaults: UserDefaults
@@ -45,6 +48,31 @@ final class AppSettings {
     var feishuWebhookURL: String { didSet { defaults.set(feishuWebhookURL, forKey: Key.feishuURL) } }
     var feishuWebhookSecret: String { didSet { defaults.set(feishuWebhookSecret, forKey: Key.feishuSecret) } }
 
+    /// 启动后自动检查 GitHub Releases 上的新版本。
+    var autoCheckUpdates: Bool { didSet { defaults.set(autoCheckUpdates, forKey: Key.autoCheckUpdates) } }
+
+    /// 用户选择跳过的版本，自动检查时不再提示。
+    var skippedUpdateVersion: String? {
+        didSet {
+            if let skippedUpdateVersion {
+                defaults.set(skippedUpdateVersion, forKey: Key.skippedUpdateVersion)
+            } else {
+                defaults.removeObject(forKey: Key.skippedUpdateVersion)
+            }
+        }
+    }
+
+    /// 已经发过系统通知的版本，避免每次自动检查都提醒。
+    var lastNotifiedUpdateVersion: String? {
+        didSet {
+            if let lastNotifiedUpdateVersion {
+                defaults.set(lastNotifiedUpdateVersion, forKey: Key.lastNotifiedUpdateVersion)
+            } else {
+                defaults.removeObject(forKey: Key.lastNotifiedUpdateVersion)
+            }
+        }
+    }
+
     /// 开始卡片上一次选择的分类。
     var lastCategoryID: String? {
         didSet {
@@ -74,5 +102,9 @@ final class AppSettings {
         feishuWebhookEnabled = defaults.object(forKey: Key.feishuEnabled) as? Bool ?? false
         feishuWebhookURL = defaults.string(forKey: Key.feishuURL) ?? ""
         feishuWebhookSecret = defaults.string(forKey: Key.feishuSecret) ?? ""
+
+        autoCheckUpdates = defaults.object(forKey: Key.autoCheckUpdates) as? Bool ?? true
+        skippedUpdateVersion = defaults.string(forKey: Key.skippedUpdateVersion)
+        lastNotifiedUpdateVersion = defaults.string(forKey: Key.lastNotifiedUpdateVersion)
     }
 }
