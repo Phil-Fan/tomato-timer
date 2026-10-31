@@ -315,49 +315,36 @@ struct StatsView: View {
         stats(for: records(on: Date()))
     }
 
-    /// App 记录 + 日历补充，7 天趋势和今日统计共用。
-    private var combinedRecords: [SessionRecord] {
-        history.records + calendarSessionRecords
-    }
-
-    private var calendarSessionRecords: [SessionRecord] {
-        calendarEntries.map { entry in
-            SessionRecord(
-                completedAt: entry.startDate,
-                minutes: entry.minutes,
-                categoryID: entry.categoryID,
-                categoryName: entry.categoryName
-            )
-        }
-    }
-
     private var calendarTodayMinutes: Int {
-        calendarEntries.reduce(0) { partial, entry in
-            Calendar.current.isDate(entry.startDate, inSameDayAs: Date())
-                ? partial + entry.minutes
-                : partial
-        }
+        let interval = FocusDay.interval(containing: Date())
+        return calendarEntries
+            .compactMap { $0.clipped(to: interval)?.minutes }
+            .reduce(0, +)
     }
 
+    /// App 记录 + 日历补充。日历时段按专注日（4:00 分界）裁剪后再合并。
     private func records(on date: Date) -> [SessionRecord] {
-        guard let interval = Calendar.current.dateInterval(of: .day, for: date) else { return [] }
-        return combinedRecords.filter { interval.contains($0.completedAt) }
-    }
-
-    private var weekRecords: [SessionRecord] {
-        let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
-        guard let start = calendar.date(byAdding: .day, value: -6, to: today) else { return [] }
-        return combinedRecords.filter { $0.completedAt >= start }
+        let interval = FocusDay.interval(containing: date)
+        let calendarRecords = calendarEntries.compactMap { entry in
+            entry.clipped(to: interval).map { clipped in
+                SessionRecord(
+                    completedAt: clipped.startDate,
+                    minutes: clipped.minutes,
+                    categoryID: clipped.categoryID,
+                    categoryName: clipped.categoryName
+                )
+            }
+        }
+        return history.records(on: date) + calendarRecords
     }
 
     private var weekMinutes: Int {
-        weekRecords.reduce(0) { $0 + $1.minutes }
+        weekDays.reduce(0) { $0 + $1.minutes }
     }
 
     private var weekDays: [DayStat] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = FocusDay.start(of: Date())
 
         return (0..<7).reversed().compactMap { offset in
             guard let day = calendar.date(byAdding: .day, value: -offset, to: today) else {
@@ -373,7 +360,7 @@ struct StatsView: View {
         calendar.refresh()
 
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = FocusDay.start(of: Date())
         guard let start = calendar.date(byAdding: .day, value: -6, to: today) else {
             calendarEntries = []
             return

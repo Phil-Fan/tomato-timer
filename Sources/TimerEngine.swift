@@ -222,13 +222,29 @@ final class TimerEngine {
             webhookURL: url,
             secret: settings.feishuWebhookSecret
         )
+        // 今日完成度要包含日历里补充的专注时段，和统计页保持一致。
+        let totals = calendar.focusTotals(
+            on: completedAt,
+            history: history,
+            categories: categories.items,
+            dailyTargetMinutes: settings.dailyTargetMinutes,
+            now: completedAt
+        )
         let summary = FeishuWebhook.Summary(
             categoryName: category?.displayName ?? "专注",
             minutes: minutes,
-            todayCount: history.todayCount,
-            todayMinutes: history.todayMinutes,
+            todayCount: totals.count,
+            todayMinutes: totals.minutes,
             dailyTargetMinutes: settings.dailyTargetMinutes,
-            completedAt: completedAt
+            completedAt: completedAt,
+            calendarMinutes: totals.calendarMinutes,
+            categories: totals.categories.map {
+                FeishuWebhook.Summary.Category(
+                    name: $0.name,
+                    minutes: $0.minutes,
+                    targetMinutes: $0.targetMinutes
+                )
+            }
         )
 
         Task {

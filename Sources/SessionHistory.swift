@@ -73,8 +73,8 @@ final class SessionHistory {
     }
 
     func records(on date: Date) -> [SessionRecord] {
-        guard let interval = calendar.dateInterval(of: .day, for: date) else { return [] }
-        return records.filter { interval.contains($0.completedAt) }
+        let interval = FocusDay.interval(containing: date, calendar: calendar)
+        return records.filter { FocusDay.contains($0.completedAt, in: interval) }
     }
 
     private func prune() {

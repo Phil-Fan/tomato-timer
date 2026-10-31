@@ -9,12 +9,20 @@ enum FeishuWebhook {
     }
 
     struct Summary: Sendable {
+        struct Category: Sendable {
+            var name: String
+            var minutes: Int
+            var targetMinutes: Int
+        }
+
         var categoryName: String
         var minutes: Int
         var todayCount: Int
         var todayMinutes: Int
         var dailyTargetMinutes: Int
         var completedAt: Date
+        var calendarMinutes: Int = 0
+        var categories: [Category] = []
         var isTest: Bool = false
     }
 
@@ -89,12 +97,13 @@ enum FeishuWebhook {
         formatter.dateFormat = "HH:mm"
 
         let target = max(0, summary.dailyTargetMinutes)
+        let calendarNote = summary.calendarMinutes > 0 ? "（含日历 \(summary.calendarMinutes) 分钟）" : ""
         let progress: String
         if target > 0 {
             let percent = Int((Double(summary.todayMinutes) / Double(target) * 100).rounded())
-            progress = "\(summary.todayCount) 个 · \(summary.todayMinutes) / \(target) 分钟（\(percent)%）"
+            progress = "\(summary.todayCount) 个 · \(summary.todayMinutes) / \(target) 分钟（\(percent)%）\(calendarNote)"
         } else {
-            progress = "\(summary.todayCount) 个 · \(summary.todayMinutes) 分钟"
+            progress = "\(summary.todayCount) 个 · \(summary.todayMinutes) 分钟\(calendarNote)"
         }
 
         let title = summary.isTest ? "🧪 飞书通知测试" : "🍅 专注完成"
@@ -104,18 +113,46 @@ enum FeishuWebhook {
         **今日进度**：\(progress)
         """
 
+        var elements: [[String: Any]] = [
+            ["tag": "div", "text": ["tag": "lark_md", "content": content]]
+        ]
+
+        if !summary.categories.isEmpty {
+            elements.append(["tag": "hr"])
+            elements.append([
+                "tag": "div",
+                "text": ["tag": "lark_md", "content": categoryProgress(for: summary.categories)]
+            ])
+        }
+
+        elements.append(["tag": "hr"])
+        elements.append([
+            "tag": "note",
+            "elements": [["tag": "plain_text", "content": "完成于 \(formatter.string(from: summary.completedAt)) · 番茄钟"]]
+        ])
+
         return [
             "config": ["wide_screen_mode": true],
             "header": [
                 "template": "red",
                 "title": ["tag": "plain_text", "content": title]
             ],
-            "elements": [
-                ["tag": "div", "text": ["tag": "lark_md", "content": content]],
-                ["tag": "hr"],
-                ["tag": "note", "elements": [["tag": "plain_text", "content": "完成于 \(formatter.string(from: summary.completedAt)) · 番茄钟"]]]
-            ]
+            "elements": elements
         ]
+    }
+
+    /// 每个分类一行：`工作  90 / 96 分钟（94%）✅`
+    private static func categoryProgress(for categories: [Summary.Category]) -> String {
+        let lines = categories.map { category -> String in
+            guard category.targetMinutes > 0 else {
+                return "**\(category.name)**　\(category.minutes) 分钟"
+            }
+
+            let percent = Int((Double(category.minutes) / Double(category.targetMinutes) * 100).rounded())
+            let closed = category.minutes >= category.targetMinutes ? " ✅" : ""
+            return "**\(category.name)**　\(category.minutes) / \(category.targetMinutes) 分钟（\(percent)%）\(closed)"
+        }
+        return (["**分类进度**"] + lines).joined(separator: "\n")
     }
 
     private static func signature(timestamp: String, secret: String) -> String {

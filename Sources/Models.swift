@@ -14,6 +14,41 @@ enum Pomodoro {
     }
 }
 
+/// 专注日：每天 4:00 开始新的一天，0:00–3:59 仍算前一天。
+enum FocusDay {
+    static let startHour = 4
+
+    /// `date` 所在专注日的起点（当天或前一天的 4:00）。
+    static func start(of date: Date, calendar: Calendar = .current) -> Date {
+        let boundary = calendar.date(bySettingHour: startHour, minute: 0, second: 0, of: date)
+            ?? calendar.startOfDay(for: date)
+        if date >= boundary { return boundary }
+
+        let previous = calendar.date(byAdding: .day, value: -1, to: date) ?? date
+        return calendar.date(bySettingHour: startHour, minute: 0, second: 0, of: previous)
+            ?? calendar.startOfDay(for: previous)
+    }
+
+    /// `date` 所在专注日的区间，结束时刻是下一天的 4:00。
+    static func interval(containing date: Date, calendar: Calendar = .current) -> DateInterval {
+        let start = start(of: date, calendar: calendar)
+        let end = calendar.date(byAdding: .day, value: 1, to: start)
+            ?? start.addingTimeInterval(24 * 60 * 60)
+        return DateInterval(start: start, end: end)
+    }
+
+    /// 相对于 `date` 所在专注日偏移若干天后的起点。
+    static func start(offsetBy days: Int, from date: Date = Date(), calendar: Calendar = .current) -> Date {
+        let start = start(of: date, calendar: calendar)
+        return calendar.date(byAdding: .day, value: days, to: start) ?? start
+    }
+
+    /// 判断时刻是否落在专注日区间内。结束时刻属于下一天，避免边界重复。
+    static func contains(_ date: Date, in interval: DateInterval) -> Bool {
+        date >= interval.start && date < interval.end
+    }
+}
+
 /// 预设的专注分类。ratio 是这个分类在每日目标里占的比例（0...1）。
 struct FocusCategory: Identifiable, Hashable, Codable {
     var id: UUID

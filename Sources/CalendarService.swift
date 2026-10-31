@@ -6,9 +6,51 @@ import Observation
 struct CalendarFocusEntry: Identifiable, Hashable {
     let id: String
     let startDate: Date
+    let endDate: Date
     let minutes: Int
     let categoryID: UUID
     let categoryName: String
+}
+
+extension CalendarFocusEntry {
+    /// 把日历时段裁剪到某个专注日，跨 4:00 的日程会分别计入相邻两天。
+    func clipped(to interval: DateInterval) -> CalendarFocusEntry? {
+        let start = max(startDate, interval.start)
+        let end = min(endDate, interval.end)
+        guard end > start else { return nil }
+
+        let clippedMinutes = Int((end.timeIntervalSince(start) / 60).rounded())
+        guard clippedMinutes > 0 else { return nil }
+        guard start != startDate || end != endDate else { return self }
+
+        return CalendarFocusEntry(
+            id: id,
+            startDate: start,
+            endDate: end,
+            minutes: clippedMinutes,
+            categoryID: categoryID,
+            categoryName: categoryName
+        )
+    }
+}
+
+/// 某天某个分类的专注合计。
+struct CategoryFocusTotal: Identifiable, Equatable, Sendable {
+    let id: String
+    let name: String
+    let minutes: Int
+    let targetMinutes: Int
+}
+
+/// 某天的专注合计：App 内完成的记录 + 从日历补充的时段。
+struct FocusTotals: Equatable, Sendable {
+    var count: Int
+    var minutes: Int
+    var calendarCount: Int
+    var calendarMinutes: Int
+    var categories: [CategoryFocusTotal] = []
+
+    static let zero = FocusTotals(count: 0, minutes: 0, calendarCount: 0, calendarMinutes: 0)
 }
 
 @MainActor
@@ -121,6 +163,7 @@ final class CalendarService {
                 CalendarFocusEntry(
                     id: event.eventIdentifier ?? key,
                     startDate: effectiveStart,
+                    endDate: effectiveEnd,
                     minutes: minutes,
                     categoryID: category.id,
                     categoryName: category.displayName
@@ -129,6 +172,94 @@ final class CalendarService {
         }
 
         return entries
+    }
+
+    /// 汇总某天的专注：App 内完成的记录 + 日历里以分类名开头的日程。
+    ///
+    /// 飞书卡片等地方需要和统计页保持一致，所以统一从这里取「今日完成度」。
+    /// 专注日以 4:00 为界，跨界的日历时长会按落在当天内的部分计算。
+    func focusTotals(
+        on date: Date = Date(),
+        history: SessionHistory,
+        categories: [FocusCategory],
+        dailyTargetMinutes: Int,
+        now: Date = Date()
+    ) -> FocusTotals {
+        let interval = FocusDay.interval(containing: date)
+
+        // 多取一天，保证跨 4:00 的日程能按当天区间正确裁剪。
+        let fetchStart = FocusDay.start(offsetBy: -1, from: date)
+        let entries = focusEntries(
+            from: fetchStart,
+            to: min(now, interval.end),
+            categories: categories
+        ).compactMap { $0.clipped(to: interval) }
+
+        let calendarMinutes = entries.reduce(0) { $0 + $1.minutes }
+        let appRecords = history.records(on: date)
+
+        return FocusTotals(
+            count: appRecords.count + entries.count,
+            minutes: appRecords.reduce(0) { $0 + $1.minutes } + calendarMinutes,
+            calendarCount: entries.count,
+            calendarMinutes: calendarMinutes,
+            categories: categoryTotals(
+                appRecords: appRecords,
+                entries: entries,
+                categories: categories,
+                dailyTargetMinutes: dailyTargetMinutes
+            )
+        )
+    }
+
+    /// 按分类汇总当天的分钟数，目标分钟数沿用统计页的比例分配规则。
+    private func categoryTotals(
+        appRecords: [SessionRecord],
+        entries: [CalendarFocusEntry],
+        categories: [FocusCategory],
+        dailyTargetMinutes: Int
+    ) -> [CategoryFocusTotal] {
+        let totalRatio = categories.reduce(0) { $0 + max(0, $1.ratio) }
+        let fallbackShare = 1.0 / Double(max(1, categories.count))
+
+        var buckets: [String: (name: String, minutes: Int, share: Double)] = [:]
+        for category in categories {
+            let share = totalRatio > 0 ? max(0, category.ratio) / totalRatio : fallbackShare
+            buckets["cat-\(category.id)"] = (category.displayName, 0, share)
+        }
+
+        func add(categoryID: UUID?, name: String, minutes: Int) {
+            let key = categoryID.map { "cat-\($0)" } ?? "other-\(name)"
+            if var bucket = buckets[key] {
+                bucket.minutes += minutes
+                buckets[key] = bucket
+            } else {
+                buckets[key] = (name, minutes, 0)
+            }
+        }
+
+        for record in appRecords {
+            add(categoryID: record.categoryID, name: record.categoryName, minutes: record.minutes)
+        }
+        for entry in entries {
+            add(categoryID: entry.categoryID, name: entry.categoryName, minutes: entry.minutes)
+        }
+
+        return buckets
+            .map { key, bucket in
+                CategoryFocusTotal(
+                    id: key,
+                    name: bucket.name,
+                    minutes: bucket.minutes,
+                    targetMinutes: Int((Double(max(0, dailyTargetMinutes)) * bucket.share).rounded())
+                )
+            }
+            .sorted { lhs, rhs in
+                if lhs.targetMinutes == rhs.targetMinutes {
+                    return lhs.minutes > rhs.minutes
+                }
+                return lhs.targetMinutes > rhs.targetMinutes
+            }
     }
 
     /// App 自己写入的日程标题形如「专注 · 分类 · 45 分钟」，备注里有「第 N 个专注」。

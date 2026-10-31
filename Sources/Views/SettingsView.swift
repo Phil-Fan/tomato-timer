@@ -41,6 +41,8 @@ struct SettingsView: View {
                 GeneralSettingsView(
                     settings: model.settings,
                     history: model.history,
+                    calendar: model.calendar,
+                    categories: model.categories,
                     updates: model.updates
                 )
                 .tabItem { Label("通用", systemImage: "gearshape") }
@@ -124,6 +126,8 @@ private struct UpdateBanner: View {
 private struct GeneralSettingsView: View {
     @Bindable var settings: AppSettings
     var history: SessionHistory
+    var calendar: CalendarService
+    var categories: CategoryStore
     var updates: UpdateService
 
     @State private var notificationStatus: UNAuthorizationStatus = .notDetermined
@@ -229,13 +233,26 @@ private struct GeneralSettingsView: View {
             webhookURL: url,
             secret: settings.feishuWebhookSecret
         )
+        let totals = calendar.focusTotals(
+            history: history,
+            categories: categories.items,
+            dailyTargetMinutes: settings.dailyTargetMinutes
+        )
         let summary = FeishuWebhook.Summary(
             categoryName: "测试分类",
             minutes: 45,
-            todayCount: history.todayCount,
-            todayMinutes: history.todayMinutes,
+            todayCount: totals.count,
+            todayMinutes: totals.minutes,
             dailyTargetMinutes: settings.dailyTargetMinutes,
             completedAt: Date(),
+            calendarMinutes: totals.calendarMinutes,
+            categories: totals.categories.map {
+                FeishuWebhook.Summary.Category(
+                    name: $0.name,
+                    minutes: $0.minutes,
+                    targetMinutes: $0.targetMinutes
+                )
+            },
             isTest: true
         )
 
