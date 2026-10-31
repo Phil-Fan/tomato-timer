@@ -32,6 +32,7 @@ targets:
         INFOPLIST_FILE: Support/Info.plist
         GENERATE_INFOPLIST_FILE: NO
         ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: ""
+        CODE_SIGN_ENTITLEMENTS: Support/TomatoTimer.entitlements
     info:
       path: Support/Info.plist
       properties:

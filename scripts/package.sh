@@ -60,7 +60,9 @@ APP_PATH=".build/Build/Products/Release/$BUNDLE_NAME"
 if [ -n "$SIGN_IDENTITY" ]; then
   echo "使用 Developer ID 签名：$SIGN_IDENTITY"
   # Hardened Runtime + 安全时间戳是公证的硬性要求。
+  # 日历权限需要 personal-information.calendars entitlement，否则 TCC 会静默拒绝授权。
   codesign --force --options runtime --timestamp \
+    --entitlements Support/TomatoTimer.entitlements \
     --sign "$SIGN_IDENTITY" "$APP_PATH"
 fi
 
