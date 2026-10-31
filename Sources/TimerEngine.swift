@@ -18,7 +18,7 @@ final class TimerEngine {
     private var endDate: Date?
     private var pausedRemaining: TimeInterval?
     private var sessionStart: Date?
-    private var plannedDuration: TimeInterval = Pomodoro.focusSeconds
+    private var plannedDuration: TimeInterval = Pomodoro.defaultSeconds
     private var ticker: Task<Void, Never>?
 
     init(settings: AppSettings, history: SessionHistory, calendar: CalendarService, categories: CategoryStore) {
@@ -26,6 +26,7 @@ final class TimerEngine {
         self.history = history
         self.calendar = calendar
         self.categories = categories
+        plannedDuration = TimeInterval(settings.focusMinutes * 60)
         startTicker()
     }
 
@@ -48,6 +49,16 @@ final class TimerEngine {
         max(1, plannedDuration)
     }
 
+    /// 本次专注的计划时长（分钟），计时页标题和完成记录都用它。
+    var plannedMinutes: Int {
+        max(1, Int((plannedDuration / 60).rounded()))
+    }
+
+    /// 尚未开始时展示的时长跟随开始卡片里的选择。
+    private var idleDuration: TimeInterval {
+        TimeInterval(Pomodoro.normalizedMinutes(settings.focusMinutes) * 60)
+    }
+
     var remainingSeconds: TimeInterval {
         if isRunning, let endDate {
             return max(0, endDate.timeIntervalSince(now))
@@ -58,7 +69,7 @@ final class TimerEngine {
         if hasStarted {
             return plannedDuration
         }
-        return Pomodoro.focusSeconds
+        return idleDuration
     }
 
     var progress: Double {
@@ -78,11 +89,13 @@ final class TimerEngine {
         isRunning ? pause() : resume()
     }
 
-    func startFocus(category: FocusCategory?, durationMinutes: Int = Pomodoro.focusMinutes) {
+    func startFocus(category: FocusCategory?, durationMinutes: Int? = nil) {
         clearSession()
         activeCategory = category
-        plannedDuration = TimeInterval(max(1, durationMinutes) * 60)
+        let minutes = Pomodoro.normalizedMinutes(durationMinutes ?? settings.focusMinutes)
+        plannedDuration = TimeInterval(minutes * 60)
         sessionStart = Date()
+        settings.focusMinutes = minutes
         begin()
     }
 
@@ -157,7 +170,7 @@ final class TimerEngine {
         pausedRemaining = nil
         sessionStart = nil
         activeCategory = nil
-        plannedDuration = Pomodoro.focusSeconds
+        plannedDuration = idleDuration
         now = Date()
     }
 
@@ -194,7 +207,7 @@ final class TimerEngine {
 
         activeCategory = nil
         sessionStart = nil
-        plannedDuration = Pomodoro.focusSeconds
+        plannedDuration = idleDuration
         playChime()
     }
 

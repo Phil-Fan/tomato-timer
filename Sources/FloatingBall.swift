@@ -9,8 +9,8 @@ enum FloatingLayout {
     static let cardWidth: CGFloat = 320
     /// 计时 / 暂停面板高度。
     static let timerCardHeight: CGFloat = 390
-    /// 只有分类和开始按钮时的紧凑高度。
-    static let compactCardHeight: CGFloat = 196
+    /// 只有分类、时长和开始按钮时的紧凑高度。
+    static let compactCardHeight: CGFloat = 240
     static let margin: CGFloat = 16
     static let cornerRadius: CGFloat = 24
 

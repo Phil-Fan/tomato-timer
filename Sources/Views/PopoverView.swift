@@ -89,6 +89,9 @@ struct PopoverView: View {
             .frame(height: chipHeight)
             .padding(.top, 10)
 
+            durationPicker
+                .padding(.top, 14)
+
             Button {
                 beginFocus()
             } label: {
@@ -102,8 +105,43 @@ struct PopoverView: View {
             .tint(.red)
             .keyboardShortcut(.defaultAction)
             .disabled(categories.items.isEmpty)
-            .padding(.top, 16)
+            .padding(.top, 14)
         }
+    }
+
+    /// 专注时长选择：15 / 30 / 45 分钟。
+    private var durationPicker: some View {
+        HStack(spacing: 6) {
+            ForEach(Pomodoro.durationOptions, id: \.self) { minutes in
+                let selected = settings.focusMinutes == minutes
+
+                Button {
+                    settings.focusMinutes = minutes
+                } label: {
+                    Text("\(minutes) 分钟")
+                        .font(.system(size: 12, weight: selected ? .semibold : .regular))
+                        .foregroundStyle(selected ? TomatoTheme.focus : Color.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 7)
+                        .background {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .fill(selected ? TomatoTheme.focus.opacity(0.14) : Color.primary.opacity(0.05))
+                        }
+                        .overlay {
+                            RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                .strokeBorder(
+                                    selected ? TomatoTheme.focus.opacity(0.85) : Color.primary.opacity(0.06),
+                                    lineWidth: selected ? 1.4 : 1
+                                )
+                        }
+                        .contentShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                }
+                .buttonStyle(.plain)
+                .help("专注 \(minutes) 分钟")
+                .accessibilityAddTraits(selected ? .isSelected : [])
+            }
+        }
+        .animation(.easeOut(duration: 0.15), value: settings.focusMinutes)
     }
 
     private var settingsButton: some View {
@@ -211,7 +249,7 @@ struct PopoverView: View {
 
             Spacer()
 
-            Text("45 分钟")
+            Text("\(engine.plannedMinutes) 分钟")
                 .font(.caption)
                 .foregroundStyle(.tertiary)
 

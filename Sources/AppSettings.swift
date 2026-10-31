@@ -11,6 +11,7 @@ final class AppSettings {
         static let calendarID = "calendarID"
         static let lastCategoryID = "lastCategoryID"
         static let dailyTarget = "dailyTargetMinutes"
+        static let focusMinutes = "focusMinutes"
         static let feishuEnabled = "feishuWebhookEnabled"
         static let feishuURL = "feishuWebhookURL"
         static let feishuSecret = "feishuWebhookSecret"
@@ -35,6 +36,9 @@ final class AppSettings {
 
     /// 每天的目标专注总时长（分钟），在分类页里设置。
     var dailyTargetMinutes: Int { didSet { defaults.set(dailyTargetMinutes, forKey: Key.dailyTarget) } }
+
+    /// 上一次选择的专注时长（15 / 30 / 45 分钟）。
+    var focusMinutes: Int { didSet { defaults.set(focusMinutes, forKey: Key.focusMinutes) } }
 
     /// 完成后发送飞书群卡片。
     var feishuWebhookEnabled: Bool { didSet { defaults.set(feishuWebhookEnabled, forKey: Key.feishuEnabled) } }
@@ -63,6 +67,9 @@ final class AppSettings {
 
         lastCategoryID = defaults.string(forKey: Key.lastCategoryID)
         dailyTargetMinutes = defaults.object(forKey: Key.dailyTarget) as? Int ?? 240
+        focusMinutes = Pomodoro.normalizedMinutes(
+            defaults.object(forKey: Key.focusMinutes) as? Int ?? Pomodoro.defaultMinutes
+        )
 
         feishuWebhookEnabled = defaults.object(forKey: Key.feishuEnabled) as? Bool ?? false
         feishuWebhookURL = defaults.string(forKey: Key.feishuURL) ?? ""

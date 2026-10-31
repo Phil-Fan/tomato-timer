@@ -1,9 +1,17 @@
 import Foundation
 
 enum Pomodoro {
-    /// 固定的专注时长。
-    static let focusMinutes = 45
-    static var focusSeconds: TimeInterval { Double(focusMinutes * 60) }
+    /// 可选的专注时长（分钟）。
+    static let durationOptions = [15, 30, 45]
+    /// 默认专注时长。
+    static let defaultMinutes = 45
+
+    static var defaultSeconds: TimeInterval { Double(defaultMinutes * 60) }
+
+    /// 把任意分钟数收敛到可选项里，避免旧偏好或外部输入出现未知时长。
+    static func normalizedMinutes(_ minutes: Int) -> Int {
+        durationOptions.contains(minutes) ? minutes : defaultMinutes
+    }
 }
 
 /// 预设的专注分类。ratio 是这个分类在每日目标里占的比例（0...1）。
