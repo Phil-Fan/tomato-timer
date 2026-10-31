@@ -106,6 +106,7 @@ Team ID 也可以不填：workflow 会从 `APPLE_SIGNING_IDENTITY` 末尾的 `(T
 ### `.github/workflows/ci.yml`
 
 - 在 `main` 的 push 和所有 PR 上运行。
+- 使用 `macos-26` runner（Xcode 26；`macos-15` 的 Xcode 16 会在 Swift 6 并发检查上失败）。
 - 用 XcodeGen 生成工程，跑 `./scripts/package.sh`（ad-hoc 签名）。
 - 校验 App 签名、DMG、ZIP 和 `SHA256SUMS.txt` 都能产出。
 
