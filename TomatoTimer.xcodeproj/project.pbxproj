@@ -20,6 +20,7 @@
 		A14DBA312D57BD221FA20365 /* FloatingBall.swift in Sources */ = {isa = PBXBuildFile; fileRef = 430A4FA2533E322DD6778AAC /* FloatingBall.swift */; };
 		AD444892382B252A75D641A7 /* AppIcon.icns in Resources */ = {isa = PBXBuildFile; fileRef = 75B26F0C7E00FFD429D87FB2 /* AppIcon.icns */; };
 		B931A4DE1786AC26D3ABE5C1 /* PopoverView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 49FBB1325AF9EEFF06E5BC87 /* PopoverView.swift */; };
+		C71EE5AE9273D19CDCDE12D1 /* ActivityRingsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7958E6E9E0851BFD6D99B66B /* ActivityRingsView.swift */; };
 		CC6087F94DE4B4F8C2A8B4AE /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA5FE602FAC7E4344DF926A4 /* Models.swift */; };
 		DB15B43C276C1B68C8C94268 /* SessionHistory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5C9F507517E72961D2D151D2 /* SessionHistory.swift */; };
 		F549430C534F6DCA62F7E90C /* TomatoTimerApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = C910FB0BDD9A7F2FB75BD216 /* TomatoTimerApp.swift */; };
@@ -34,6 +35,7 @@
 		70D4E55D51BF794B27975098 /* StatsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StatsView.swift; sourceTree = "<group>"; };
 		75B26F0C7E00FFD429D87FB2 /* AppIcon.icns */ = {isa = PBXFileReference; lastKnownFileType = image.icns; path = AppIcon.icns; sourceTree = "<group>"; };
 		76AE39B5A74681E51C9104B0 /* CategoryStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CategoryStore.swift; sourceTree = "<group>"; };
+		7958E6E9E0851BFD6D99B66B /* ActivityRingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityRingsView.swift; sourceTree = "<group>"; };
 		798F276B4374A9DCF0E3AEE4 /* Theme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Theme.swift; sourceTree = "<group>"; };
 		A5861DB3DD8724BCB85E1991 /* SettingsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SettingsView.swift; sourceTree = "<group>"; };
 		C910FB0BDD9A7F2FB75BD216 /* TomatoTimerApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TomatoTimerApp.swift; sourceTree = "<group>"; };
@@ -66,6 +68,7 @@
 		B834AE59148AF45474AEDD3B /* Views */ = {
 			isa = PBXGroup;
 			children = (
+				7958E6E9E0851BFD6D99B66B /* ActivityRingsView.swift */,
 				49FBB1325AF9EEFF06E5BC87 /* PopoverView.swift */,
 				A5861DB3DD8724BCB85E1991 /* SettingsView.swift */,
 				70D4E55D51BF794B27975098 /* StatsView.swift */,
@@ -172,6 +175,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				C71EE5AE9273D19CDCDE12D1 /* ActivityRingsView.swift in Sources */,
 				940992D3A3D0EAA019EBA970 /* AppModel.swift in Sources */,
 				4D6B6DC735E6FAA780D7B15A /* AppSettings.swift in Sources */,
 				1AFAC0FB1BE9BE8D185B992E /* CalendarService.swift in Sources */,

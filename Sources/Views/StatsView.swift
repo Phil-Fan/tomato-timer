@@ -28,8 +28,25 @@ struct StatsView: View {
     // MARK: - 今天
 
     private var todayCard: some View {
-        HStack(spacing: 24) {
-            todayRing
+        HStack(spacing: 22) {
+            ActivityRingsView(rings: rings, size: 176) {
+                VStack(spacing: 1) {
+                    Text("\(completionPercent)%")
+                        .font(.system(size: 24, weight: .bold, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .contentTransition(.numericText())
+
+                    Text("\(todayMinutes)/\(target)")
+                        .font(.system(size: 9, weight: .medium, design: .rounded))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .accessibilityLabel("今天已专注 \(todayMinutes) 分钟，目标 \(target) 分钟，完成 \(completionPercent)%")
 
             VStack(alignment: .leading, spacing: 5) {
                 Text("今天")
@@ -63,6 +80,13 @@ struct StatsView: View {
                         .foregroundStyle(.secondary)
                 }
                 .padding(.top, 2)
+
+                if !rings.isEmpty {
+                    ringsBadge
+                        .padding(.top, 1)
+                }
+
+                Spacer(minLength: 0)
             }
 
             Spacer(minLength: 0)
@@ -71,40 +95,42 @@ struct StatsView: View {
         .background(cardBackground)
     }
 
-    private var todayRing: some View {
-        ZStack {
-            Circle()
-                .stroke(accent.opacity(0.12), lineWidth: 16)
-
-            Circle()
-                .trim(from: 0, to: ringProgress)
-                .stroke(
-                    AngularGradient(
-                        colors: [accent.opacity(0.55), accent],
-                        center: .center
-                    ),
-                    style: StrokeStyle(lineWidth: 16, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
-                .shadow(color: accent.opacity(0.25), radius: 4)
-                .animation(.easeOut(duration: 0.35), value: ringProgress)
-
-            VStack(spacing: 0) {
-                Text("\(completionPercent)")
-                    .font(.system(size: 34, weight: .bold, design: .rounded))
-                    .monospacedDigit()
-                Text("%")
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(.secondary)
-            }
+    /// 每个分类一圈：颜色跟随分类，各自按自己的目标闭合。
+    private var rings: [ActivityRing] {
+        todayStats.compactMap { stat in
+            guard stat.targetMinutes > 0 else { return nil }
+            return ActivityRing(
+                id: stat.id,
+                color: stat.color,
+                progress: Double(stat.minutes) / Double(stat.targetMinutes)
+            )
         }
-        .frame(width: 132, height: 132)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("今天已专注 \(todayMinutes) 分钟，完成 \(completionPercent)%")
     }
 
-    private var ringProgress: Double {
-        min(1, Double(todayMinutes) / Double(target))
+    private var closedRingCount: Int {
+        rings.filter(\.isClosed).count
+    }
+
+    private var ringsBadge: some View {
+        let total = rings.count
+        let allClosed = total > 0 && closedRingCount == total
+
+        return HStack(spacing: 5) {
+            Image(systemName: allClosed ? "checkmark.circle.fill" : "circle.circle")
+                .font(.system(size: 10, weight: .bold))
+
+            Text(allClosed ? "全部 \(total) 圈闭合" : "\(closedRingCount)/\(total) 圈闭合")
+                .font(.caption2.weight(.semibold))
+                .monospacedDigit()
+        }
+        .foregroundStyle(allClosed ? accent : Color.secondary)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(
+            Capsule()
+                .fill(allClosed ? accent.opacity(0.14) : Color.primary.opacity(0.06))
+        )
+        .animation(.easeOut(duration: 0.25), value: closedRingCount)
     }
 
     private var completionPercent: Int {
@@ -168,12 +194,12 @@ struct StatsView: View {
 
                 Spacer()
 
-                Text("实际 / 目标")
+                Text("完成度")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)
             }
 
-            VStack(spacing: 10) {
+            VStack(spacing: 12) {
                 ForEach(todayStats) { stat in
                     categoryRow(stat)
                 }
@@ -184,49 +210,77 @@ struct StatsView: View {
     }
 
     private func categoryRow(_ stat: CategoryStat) -> some View {
-        HStack(spacing: 12) {
-            Image(systemName: stat.symbol)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(stat.color)
-                .frame(width: 18)
+        let progress = goalProgress(stat)
+        let closed = stat.targetMinutes > 0 && stat.minutes >= stat.targetMinutes
 
-            VStack(alignment: .leading, spacing: 5) {
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(stat.name)
-                        .font(.callout)
+        return VStack(spacing: 6) {
+            HStack(spacing: 10) {
+                Image(systemName: stat.symbol)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundStyle(stat.color)
+                    .frame(width: 20, height: 20)
+                    .background(Circle().fill(stat.color.opacity(0.13)))
 
-                    Spacer(minLength: 4)
+                Text(stat.name)
+                    .font(.callout)
 
-                    Text(stat.targetMinutes > 0 ? "\(stat.minutes) / \(stat.targetMinutes) 分钟" : "\(stat.minutes) 分钟")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        .monospacedDigit()
+                Spacer(minLength: 6)
 
-                    Text("\(percent(stat.actualShare)) / \(percent(stat.targetShare))")
-                        .font(.caption2)
-                        .foregroundStyle(.tertiary)
-                        .monospacedDigit()
-                        .frame(width: 68, alignment: .trailing)
-                }
+                Text(stat.targetMinutes > 0 ? "\(stat.minutes) / \(stat.targetMinutes) 分钟" : "\(stat.minutes) 分钟")
+                    .font(.caption)
+                    .foregroundStyle(closed ? Color.primary : .secondary)
+                    .monospacedDigit()
 
-                GeometryReader { geometry in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.07))
+                Text(stat.targetMinutes > 0 ? percent(progress) : "—")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(closed ? stat.color : .secondary)
+                    .monospacedDigit()
+                    .frame(width: 38, alignment: .trailing)
 
-                        Capsule()
-                            .fill(stat.color)
-                            .frame(width: max(0, geometry.size.width * stat.actualShare))
-
-                        Rectangle()
-                            .fill(Color.primary.opacity(0.5))
-                            .frame(width: 1.5, height: 6)
-                            .offset(x: geometry.size.width * stat.targetShare - 0.75)
+                Group {
+                    if closed {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundStyle(stat.color)
+                    } else {
+                        Color.clear
                     }
                 }
-                .frame(height: 6)
+                .frame(width: 14, height: 14)
+                .accessibilityHidden(true)
             }
+
+            GeometryReader { geometry in
+                ZStack(alignment: .leading) {
+                    Capsule()
+                        .fill(Color.primary.opacity(0.08))
+
+                    Capsule()
+                        .fill(
+                            LinearGradient(
+                                colors: [stat.color.opacity(0.7), stat.color],
+                                startPoint: .leading,
+                                endPoint: .trailing
+                            )
+                        )
+                        .frame(width: max(0, geometry.size.width * progress))
+                        .shadow(color: stat.color.opacity(closed ? 0.35 : 0), radius: 3)
+                }
+            }
+            .frame(height: 7)
+            .animation(.easeOut(duration: 0.35), value: progress)
         }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel(
+            stat.targetMinutes > 0
+                ? "\(stat.name) \(stat.minutes) 分钟，目标 \(stat.targetMinutes) 分钟\(closed ? "，已闭合" : "")"
+                : "\(stat.name) \(stat.minutes) 分钟，无目标"
+        )
+    }
+
+    private func goalProgress(_ stat: CategoryStat) -> Double {
+        guard stat.targetMinutes > 0 else { return 0 }
+        return min(1, Double(stat.minutes) / Double(stat.targetMinutes))
     }
 
     // MARK: - 数据
@@ -292,8 +346,6 @@ struct StatsView: View {
             }
         }
 
-        let totalMinutes = max(1, buckets.values.reduce(0) { $0 + $1.minutes })
-
         return buckets
             .map { key, bucket in
                 CategoryStat(
@@ -303,7 +355,6 @@ struct StatsView: View {
                     color: bucket.color,
                     minutes: bucket.minutes,
                     targetMinutes: Int((Double(target) * bucket.targetShare).rounded()),
-                    actualShare: Double(bucket.minutes) / Double(totalMinutes),
                     targetShare: bucket.targetShare
                 )
             }
@@ -345,7 +396,6 @@ private struct CategoryStat: Identifiable {
     let color: Color
     let minutes: Int
     let targetMinutes: Int
-    let actualShare: Double
     let targetShare: Double
 }
 

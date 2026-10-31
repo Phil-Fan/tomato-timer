@@ -8,15 +8,15 @@
 
 ## 功能
 
-- 固定 **45 分钟** 专注：点开菜单栏图标就是开始卡片，选分类后一步开始。
+- **15 / 30 / 45 分钟** 专注：点开菜单栏图标就是开始卡片，选分类和时长后一步开始。
 - 没有休息阶段：完成一个番茄后回到开始卡片，直接开始下一个。
 - 菜单栏显示倒计时，桌面悬浮球同步显示进度。
-- 完成的专注写入指定日历，标题固定为 `专注 · 分类 · 45 分钟`，备注带第几个专注和完成时间。
+- 完成的专注写入指定日历，标题形如 `专注 · 分类 · 45 分钟`，备注带第几个专注和完成时间。
 - 设置 → 分类：顶部设置每日目标总分钟数，每个分类按百分比分配；分类右侧实时显示换算后的目标分钟数。
 - 统计页：
-  - 今日活动环：完成度、已专注分钟、目标分钟
+  - 今日活动环：Apple Watch 风格的多级圆环，每个分类一圈、各自颜色，达到该分类的每日目标就闭合；中心显示总完成度
   - 最近 7 天趋势柱
-  - 今天的分类实际占比 vs 目标占比（进度条 + 目标刻度）
+  - 今天的分类进度：已专注 / 目标分钟、完成百分比、闭合标记
 - 分类可增删改名、换 SF Symbol 图标，最多 8 个。
 - 完成后可发送飞书群卡片：设置 → 通用 → 飞书，粘贴自定义机器人 Webhook；支持签名校验和测试发送。
 - 提醒默认开启，结束发系统通知并播放提示音。
@@ -112,7 +112,7 @@ Webhook 地址等同于发消息权限，不要公开分享。
 
 ## 开发提示
 
-Debug 构建支持一个冒烟测试入口，直接启动一个短番茄（正式界面固定 45 分钟，这个只用于测试）：
+Debug 构建支持一个冒烟测试入口，直接启动一个短番茄（正式界面可选 15 / 30 / 45 分钟，这个只用于测试）：
 
 ```bash
 TOMATO_AUTOSTART=1 TOMATO_AUTOSTART_MINUTES=1 \
@@ -125,7 +125,7 @@ TOMATO_AUTOSTART=1 TOMATO_AUTOSTART_MINUTES=1 \
 Sources/
   TomatoTimerApp.swift     菜单栏入口 + 悬浮球装配
   AppModel.swift           依赖装配
-  TimerEngine.swift        45 分钟计时状态机
+  TimerEngine.swift        专注时长计时状态机
   AppSettings.swift        偏好设置（UserDefaults）
   CategoryStore.swift      分类与每日目标
   SessionHistory.swift     完成记录 + 今日统计
@@ -135,6 +135,7 @@ Sources/
   Views/
     PopoverView.swift      开始卡片 + 计时界面
     StatsView.swift        统计与图表
+    ActivityRingsView.swift Apple Watch 风格的多级活动圆环
     SettingsView.swift     设置
     Theme.swift            分类配色
 Support/Info.plist         由 xcodegen 生成
