@@ -6,6 +6,9 @@ import UserNotifications
 struct SettingsView: View {
     let model: AppModel
 
+    @State private var selectedTab = SettingsTab.stats
+    @State private var statsRefreshToken = 0
+
     var body: some View {
         VStack(spacing: 0) {
             if model.updates.pendingRelease != nil {
@@ -13,23 +16,27 @@ struct SettingsView: View {
                 Divider()
             }
 
-            TabView {
+            TabView(selection: $selectedTab) {
                 StatsView(
                     settings: model.settings,
                     history: model.history,
                     categories: model.categories,
-                    calendar: model.calendar
+                    calendar: model.calendar,
+                    refreshToken: statsRefreshToken
                 )
                 .tabItem { Label("统计", systemImage: "chart.pie") }
+                .tag(SettingsTab.stats)
 
                 CategorySettingsView(
                     settings: model.settings,
                     categories: model.categories
                 )
                 .tabItem { Label("分类", systemImage: "square.grid.2x2") }
+                .tag(SettingsTab.categories)
 
                 CalendarSettingsView(settings: model.settings, calendar: model.calendar)
                     .tabItem { Label("日历", systemImage: "calendar") }
+                    .tag(SettingsTab.calendar)
 
                 GeneralSettingsView(
                     settings: model.settings,
@@ -37,14 +44,30 @@ struct SettingsView: View {
                     updates: model.updates
                 )
                 .tabItem { Label("通用", systemImage: "gearshape") }
+                .tag(SettingsTab.general)
+            }
+            .onChange(of: selectedTab) { _, tab in
+                // 每次切回统计页都重新读取日历，避免停留在旧数据。
+                if tab == .stats {
+                    statsRefreshToken &+= 1
+                }
             }
         }
         .frame(width: 640, height: 560)
         .onAppear {
             NSApp.activate()
             NSApp.keyWindow?.makeKeyAndOrderFront(nil)
+            // 重新打开设置窗口时也刷新统计页。
+            statsRefreshToken &+= 1
         }
     }
+}
+
+private enum SettingsTab: Hashable {
+    case stats
+    case categories
+    case calendar
+    case general
 }
 
 /// 设置窗口顶部的更新提示，任何标签页都能看到。

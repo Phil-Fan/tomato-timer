@@ -8,6 +8,8 @@ struct StatsView: View {
     var history: SessionHistory
     var categories: CategoryStore
     var calendar: CalendarService
+    /// 每次切回统计页时递增，触发重新读取日历。
+    var refreshToken: Int = 0
 
     @State private var calendarEntries: [CalendarFocusEntry] = []
 
@@ -28,7 +30,9 @@ struct StatsView: View {
             }
             .padding(16)
         }
-        .onAppear(perform: reloadCalendarEntries)
+        .task(id: refreshToken) {
+            reloadCalendarEntries()
+        }
         .onChange(of: categories.items) { _, _ in
             reloadCalendarEntries()
         }
